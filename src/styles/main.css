@@ -6,6 +6,7 @@
 }
 
 body {
+  min-width: 360px;
   background: #f6f8f8;
   margin: 0;
   padding: 1.25rem max(1.25rem, env(safe-area-inset-right)) 7.5rem max(1.25rem, env(safe-area-inset-left));
@@ -410,6 +411,14 @@ h3 {
   margin: 0;
   padding: .2rem .38rem;
   font-size: .85rem;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.inline-field input::-webkit-inner-spin-button,
+.inline-field input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .inline-field span {
