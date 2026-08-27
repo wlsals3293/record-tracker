@@ -18,10 +18,10 @@ function missingRoot(): never { throw new Error("Application root is missing.");
 
 root.innerHTML = `
   <header class="app-header">
-    <div><h1>기록 관리</h1><p class="muted">KST 기준 · 현재 날짜의 기록만 표시</p></div>
+    <div><h1>기록 관리</h1></div>
     <div class="date-controls">
       <button class="secondary outline today-button" type="button" data-action="today">오늘</button>
-      <label>날짜 <input id="date-filter" type="date" aria-label="표시할 날짜" /></label>
+      <input id="date-filter" type="date" aria-label="표시할 날짜" />
     </div>
   </header>
   <section class="filter-section" aria-label="결과 상태 필터">
@@ -45,14 +45,13 @@ root.innerHTML = `
     </div>
   </section>
   <section class="stats" aria-label="선택한 날짜의 통계">
-    <div class="stat-record"><strong>Record</strong><span id="record-stat">전체 0 · 성공 0 · 실패 0 · 미지정 0</span></div>
-    <div><strong>Data</strong><span id="data-stat">0 GB · 0 MB</span></div>
-    <div><strong>Length</strong><span id="length-stat">0 시간 · 0 초</span></div>
+    <div><strong>데이터</strong><span id="data-stat">0 GB · 0 MB</span></div>
+    <div><strong>길이</strong><span id="length-stat">0 시간 · 0 초</span></div>
   </section>
   <p id="status" class="status" role="status" aria-live="polite"></p>
   <section class="records-section" aria-label="기록 목록">
     <div class="list-header">
-      <h2>기록 목록 <span id="record-count">0</span></h2>
+      <h2>기록 목록</h2>
       <div class="list-actions" aria-label="기록 관리">
         <button type="button" class="secondary outline" data-action="open-export">내보내기</button>
         <button type="button" class="secondary outline" data-action="open-import">가져오기</button>
@@ -92,11 +91,10 @@ root.innerHTML = `
 
 const list = required<HTMLElement>("#record-list");
 const filter = required<HTMLInputElement>("#date-filter");
-const recordStat = required<HTMLElement>("#record-stat");
 const dataStat = required<HTMLElement>("#data-stat");
 const lengthStat = required<HTMLElement>("#length-stat");
 const status = required<HTMLElement>("#status");
-const recordCount = required<HTMLElement>("#record-count");
+
 const exportDialog = required<HTMLDialogElement>("#export-dialog");
 const importDialog = required<HTMLDialogElement>("#import-dialog");
 const exportText = required<HTMLTextAreaElement>("#export-text");
@@ -151,15 +149,21 @@ function recordTemplate(record: RecordItem): string {
   return `
     <article class="record-row" data-id="${record.id}">
       <time datetime="${new Date(record.timestamp).toISOString()}">${kstTime(record.timestamp)}</time>
-      <div class="result-buttons" role="group" aria-label="${kstTime(record.timestamp)} 결과">
+      <div class="result-buttons" aria-label="${kstTime(record.timestamp)} 결과">
         <button type="button" class="result success ${success ? "selected" : ""}" data-action="result" data-result="success" aria-pressed="${success}">${success ? "✓ 성공" : "성공"}</button>
         <button type="button" class="result fail ${fail ? "selected" : ""}" data-action="result" data-result="fail" aria-pressed="${fail}">${fail ? "✓ 실패" : "실패"}</button>
       </div>
       <div class="metrics-fields">
-        <label class="inline-field data-field">Data <input type="number" min="0" step="any" inputmode="decimal" aria-label="Data MB" data-field="dataMb" value="${numberValue(record.dataMb)}" /> <span>MB</span></label>
-        <label class="inline-field length-field">Length <input type="number" min="0" step="1" inputmode="numeric" aria-label="Length seconds" data-field="lengthSeconds" value="${numberValue(record.lengthSeconds)}" /> <span>sec</span></label>
+        <label class="inline-field data-field">데이터 <input type="number" min="0" step="any" inputmode="decimal" aria-label="Data MB" data-field="dataMb" value="${numberValue(record.dataMb)}" /> <span>MB</span></label>
+        <label class="inline-field length-field">길이 <input type="number" min="0" step="1" inputmode="numeric" aria-label="Length seconds" data-field="lengthSeconds" value="${numberValue(record.lengthSeconds)}" /> <span>초</span></label>
       </div>
-      <button type="button" class="delete-button danger-action" data-action="delete" aria-label="${kstTime(record.timestamp)} 기록 삭제">삭제</button>
+      <button type="button" class="delete-button" data-action="delete" aria-label="${kstTime(record.timestamp)} 기록 삭제" title="기록 삭제">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <line x1="10" y1="11" x2="10" y2="17" />
+          <line x1="14" y1="11" x2="14" y2="17" />
+        </svg>
+      </button>
     </article>`;
 }
 
@@ -181,7 +185,7 @@ function updateFilterTabs(): void {
 function render(): void {
   filter.value = selectedDate;
   const visible = filteredRecords();
-  recordCount.textContent = String(visible.length);
+
   updateFilterTabs();
   refreshStatistics();
   list.innerHTML = visible.length === 0
@@ -190,10 +194,8 @@ function render(): void {
 }
 
 function refreshStatistics(): void {
-  const dayStats = calculateStatistics(dateRecords());
   const filteredStats = calculateStatistics(filteredRecords());
 
-  recordStat.textContent = `전체 ${displayNumber(dayStats.totalCount)} · 성공 ${displayNumber(dayStats.successCount)} · 실패 ${displayNumber(dayStats.failCount)} · 미지정 ${displayNumber(dayStats.unspecifiedCount)}`;
   dataStat.textContent = `${displayNumber(filteredStats.totalMb / 1024)} GB · ${displayNumber(filteredStats.totalMb)} MB`;
   lengthStat.textContent = `${displayNumber(filteredStats.totalSeconds / 3600)} 시간 · ${displayNumber(filteredStats.totalSeconds)} 초`;
 }
