@@ -119,6 +119,18 @@ function dateRecords(): RecordItem[] {
   return records.filter((record) => kstDate(record.timestamp) === selectedDate).sort((a, b) => b.timestamp - a.timestamp);
 }
 
+function getDayRecordOrderMap(): Map<string, number> {
+  const dayRecordsAsc = records
+    .filter((record) => kstDate(record.timestamp) === selectedDate)
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const orderMap = new Map<string, number>();
+  dayRecordsAsc.forEach((record, index) => {
+    orderMap.set(record.id, index + 1);
+  });
+  return orderMap;
+}
+
 function filteredRecords(): RecordItem[] {
   const dayRecords = dateRecords();
   if (selectedResultFilter === "success") return dayRecords.filter((record) => record.result === "success");
@@ -143,19 +155,24 @@ function emptyMessage(): string {
   return "표시할 기록이 없습니다.";
 }
 
-function recordTemplate(record: RecordItem): string {
+function recordTemplate(record: RecordItem, order: number): string {
   const success = record.result === "success";
   const fail = record.result === "fail";
   return `
     <article class="record-row" data-id="${record.id}">
-      <time datetime="${new Date(record.timestamp).toISOString()}">${kstTime(record.timestamp)}</time>
-      <div class="result-buttons" aria-label="${kstTime(record.timestamp)} 결과">
-        <button type="button" class="result success ${success ? "selected" : ""}" data-action="result" data-result="success" aria-pressed="${success}">${success ? "✓ 성공" : "성공"}</button>
-        <button type="button" class="result fail ${fail ? "selected" : ""}" data-action="result" data-result="fail" aria-pressed="${fail}">${fail ? "✓ 실패" : "실패"}</button>
+      <div class="record-meta">
+        <span class="record-order" aria-label="기록 번호 ${order}">${order}</span>
+        <time datetime="${new Date(record.timestamp).toISOString()}">${kstTime(record.timestamp)}</time>
       </div>
-      <div class="metrics-fields">
-        <label class="inline-field data-field">데이터 <input type="number" min="0" step="any" inputmode="decimal" aria-label="Data MB" data-field="dataMb" value="${numberValue(record.dataMb)}" /> <span>MB</span></label>
-        <label class="inline-field length-field">길이 <input type="number" min="0" step="1" inputmode="numeric" aria-label="Length seconds" data-field="lengthSeconds" value="${numberValue(record.lengthSeconds)}" /> <span>초</span></label>
+      <div class="record-main">
+        <div class="result-buttons" aria-label="${kstTime(record.timestamp)} 결과">
+          <button type="button" class="result success ${success ? "selected" : ""}" data-action="result" data-result="success" aria-pressed="${success}">${success ? "✓ 성공" : "성공"}</button>
+          <button type="button" class="result fail ${fail ? "selected" : ""}" data-action="result" data-result="fail" aria-pressed="${fail}">${fail ? "✓ 실패" : "실패"}</button>
+        </div>
+        <div class="metrics-fields">
+          <label class="inline-field data-field">데이터 <input type="number" min="0" step="any" inputmode="decimal" aria-label="Data MB" data-field="dataMb" value="${numberValue(record.dataMb)}" /> <span>MB</span></label>
+          <label class="inline-field length-field">길이 <input type="number" min="0" step="1" inputmode="numeric" aria-label="Length seconds" data-field="lengthSeconds" value="${numberValue(record.lengthSeconds)}" /> <span>초</span></label>
+        </div>
       </div>
       <button type="button" class="delete-button" data-action="delete" aria-label="${kstTime(record.timestamp)} 기록 삭제" title="기록 삭제">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -185,12 +202,13 @@ function updateFilterTabs(): void {
 function render(): void {
   filter.value = selectedDate;
   const visible = filteredRecords();
+  const orderMap = getDayRecordOrderMap();
 
   updateFilterTabs();
   refreshStatistics();
   list.innerHTML = visible.length === 0
     ? `<p class="empty-state">${emptyMessage()}</p>`
-    : visible.map(recordTemplate).join("");
+    : visible.map((record) => recordTemplate(record, orderMap.get(record.id) ?? 1)).join("");
 }
 
 function refreshStatistics(): void {

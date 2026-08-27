@@ -281,15 +281,42 @@ h3 {
 
 .record-row {
   display: grid;
-  grid-template-columns: 4.8rem 11.8rem minmax(16rem, 1fr) auto;
+  grid-template-columns: minmax(7.2rem, auto) 1fr auto;
   align-items: center;
-  gap: .45rem;
+  gap: .65rem;
   margin: 0;
   padding: .42rem .5rem;
   border: 1px solid var(--pico-muted-border-color);
   border-radius: .45rem;
   background: var(--pico-card-background-color);
   box-shadow: none;
+}
+
+.record-meta {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.record-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.45rem;
+  height: 1.45rem;
+  padding: 0 .35rem;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--pico-color) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pico-color) 12%, transparent);
+  color: var(--pico-color);
+  font-size: .74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .record-row time {
@@ -299,10 +326,19 @@ h3 {
   white-space: nowrap;
 }
 
+.record-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  min-width: 0;
+}
+
 .result-buttons {
   display: flex;
   align-items: center;
   gap: .35rem;
+  flex-shrink: 0;
 }
 
 .result {
@@ -352,9 +388,8 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-evenly;
-  justify-self: center;
   gap: .65rem;
-  width: 100%;
+  flex: 1;
   padding-left: .8rem;
 }
 
@@ -576,17 +611,41 @@ dialog article>footer {
 @media (max-width: 730px) {
   .record-row {
     grid-template-columns: auto 1fr auto;
-    row-gap: .4rem;
+    align-items: center;
+    gap: .5rem;
+    padding: .42rem .5rem;
+  }
+
+  .record-meta {
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    white-space: nowrap;
+    align-self: center;
+  }
+
+  .record-order {
+    min-width: 1.35rem;
+    height: 1.35rem;
+    font-size: .7rem;
+    padding: 0 .25rem;
   }
 
   .record-row time {
-    grid-column: 1;
-    grid-row: 1;
+    font-size: .82rem;
+  }
+
+  .record-main {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    min-width: 0;
+    width: 100%;
   }
 
   .result-buttons {
-    grid-column: 2;
-    grid-row: 1;
     display: flex;
     width: 100%;
     gap: .35rem;
@@ -603,13 +662,22 @@ dialog article>footer {
 
   .delete-button {
     grid-column: 3;
-    grid-row: 1;
+    align-self: center;
   }
 
   .metrics-fields {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    padding-left: .7rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .45rem;
+    width: 100%;
+    padding-left: 0;
+  }
+
+  .inline-field {
+    flex: 1 1 0;
+    justify-content: center;
+    font-size: .75rem;
   }
 }
 
@@ -664,7 +732,16 @@ dialog article>footer {
 
   .record-row {
     grid-template-columns: auto 1fr auto;
+    gap: .5rem;
     padding: .4rem;
+  }
+
+  .record-meta {
+    gap: .25rem;
+  }
+
+  .record-row time {
+    font-size: .78rem;
   }
 
   .result-buttons {
@@ -672,16 +749,17 @@ dialog article>footer {
   }
 
   .result {
-    flex: 1 1 0;
-    width: 100%;
-    min-width: 0;
-    max-width: none;
     padding: .25rem .2rem;
     font-size: .76rem;
   }
 
+  .metrics-fields {
+    gap: .35rem;
+    padding-left: 0;
+  }
+
   .inline-field input {
-    width: 3.75rem;
+    width: 3.6rem;
   }
 }
 
@@ -725,7 +803,23 @@ dialog article>footer {
 
   .record-row {
     grid-template-columns: auto 1fr auto;
-    column-gap: .25rem;
+    gap: .35rem;
+    padding: .35rem;
+  }
+
+  .record-meta {
+    gap: .2rem;
+  }
+
+  .record-order {
+    min-width: 1.25rem;
+    height: 1.25rem;
+    font-size: .65rem;
+    padding: 0 .15rem;
+  }
+
+  .record-row time {
+    font-size: .72rem;
   }
 
   .result-buttons {
@@ -733,17 +827,13 @@ dialog article>footer {
   }
 
   .result {
-    flex: 1 1 0;
-    width: 100%;
-    min-width: 0;
-    max-width: none;
     padding: .25rem .15rem;
     font-size: .74rem;
   }
 
   .metrics-fields {
-    gap: .38rem;
-    padding-left: .5rem;
+    gap: .25rem;
+    padding-left: 0;
   }
 
   .inline-field {
@@ -751,7 +841,7 @@ dialog article>footer {
   }
 
   .inline-field input {
-    width: 3.35rem;
+    width: 3.1rem;
+    font-size: .78rem;
   }
-
 }
