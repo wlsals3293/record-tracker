@@ -9,20 +9,49 @@ export interface Statistics {
   totalSeconds: number;
 }
 
-export function calculateStatistics(records: RecordItem[]): Statistics {
-  return records.reduce<Statistics>(
-    (total, record) => ({
-      totalCount: total.totalCount + 1,
-      successCount: total.successCount + (record.result === "success" ? 1 : 0),
-      failCount: total.failCount + (record.result === "fail" ? 1 : 0),
-      unspecifiedCount: total.unspecifiedCount + (record.result === null ? 1 : 0),
-      totalMb: total.totalMb + (record.dataMb ?? 0),
-      totalSeconds: total.totalSeconds + (record.lengthSeconds ?? 0),
-    }),
-    { totalCount: 0, successCount: 0, failCount: 0, unspecifiedCount: 0, totalMb: 0, totalSeconds: 0 }
-  );
+export function calculateStatistics(records: readonly RecordItem[]): Statistics {
+  let totalCount = 0;
+  let successCount = 0;
+  let failCount = 0;
+  let unspecifiedCount = 0;
+  let totalMb = 0;
+  let totalSeconds = 0;
+
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+    totalCount++;
+    if (record.result === "success") {
+      successCount++;
+    } else if (record.result === "fail") {
+      failCount++;
+    } else {
+      unspecifiedCount++;
+    }
+    if (record.dataMb !== null) {
+      totalMb += record.dataMb;
+    }
+    if (record.lengthSeconds !== null) {
+      totalSeconds += record.lengthSeconds;
+    }
+  }
+
+  return {
+    totalCount,
+    successCount,
+    failCount,
+    unspecifiedCount,
+    totalMb,
+    totalSeconds,
+  };
 }
 
+const numberFormatters = new Map<number, Intl.NumberFormat>();
+
 export function displayNumber(value: number, maximumFractionDigits = 2): string {
-  return new Intl.NumberFormat("ko-KR", { maximumFractionDigits }).format(value);
+  let formatter = numberFormatters.get(maximumFractionDigits);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("ko-KR", { maximumFractionDigits });
+    numberFormatters.set(maximumFractionDigits, formatter);
+  }
+  return formatter.format(value);
 }

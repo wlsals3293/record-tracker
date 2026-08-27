@@ -113,26 +113,32 @@ function required<T extends Element>(selector: string): T {
   return element;
 }
 
-function persist(): void { saveData({ version: APP_DATA_VERSION, records }); }
-
-function dateRecords(): RecordItem[] {
-  return records.filter((record) => kstDate(record.timestamp) === selectedDate).sort((a, b) => b.timestamp - a.timestamp);
+let saveTimeoutId: number | null = null;
+function persist(immediate = true): void {
+  if (immediate) {
+    if (saveTimeoutId !== null) {
+      window.clearTimeout(saveTimeoutId);
+      saveTimeoutId = null;
+    }
+    const success = saveData({ version: APP_DATA_VERSION, records });
+    if (!success) setStatus("저장 공간이 부족하여 저장에 실패했습니다.", true);
+  } else {
+    if (saveTimeoutId !== null) window.clearTimeout(saveTimeoutId);
+    saveTimeoutId = window.setTimeout(() => {
+      saveTimeoutId = null;
+      const success = saveData({ version: APP_DATA_VERSION, records });
+      if (!success) setStatus("저장 공간이 부족하여 저장에 실패했습니다.", true);
+    }, 300);
+  }
 }
 
-function getDayRecordOrderMap(): Map<string, number> {
-  const dayRecordsAsc = records
+function getDayRecords(): RecordItem[] {
+  return records
     .filter((record) => kstDate(record.timestamp) === selectedDate)
-    .sort((a, b) => a.timestamp - b.timestamp);
-
-  const orderMap = new Map<string, number>();
-  dayRecordsAsc.forEach((record, index) => {
-    orderMap.set(record.id, index + 1);
-  });
-  return orderMap;
+    .sort((a, b) => b.timestamp - a.timestamp);
 }
 
-function filteredRecords(): RecordItem[] {
-  const dayRecords = dateRecords();
+function getVisibleRecords(dayRecords: RecordItem[]): RecordItem[] {
   if (selectedResultFilter === "success") return dayRecords.filter((record) => record.result === "success");
   if (selectedResultFilter === "fail") return dayRecords.filter((record) => record.result === "fail");
   if (selectedResultFilter === "unspecified") return dayRecords.filter((record) => record.result === null);
@@ -146,8 +152,7 @@ function setStatus(message = "", isError = false): void {
 
 function numberValue(value: number | null): string { return value === null ? "" : String(value); }
 
-function emptyMessage(): string {
-  const dayTotal = dateRecords().length;
+function emptyMessage(dayTotal: number): string {
   if (dayTotal === 0) return "이 날짜에는 아직 기록이 없습니다.";
   if (selectedResultFilter === "success") return "성공으로 표시된 기록이 없습니다.";
   if (selectedResultFilter === "fail") return "실패로 표시된 기록이 없습니다.";
@@ -184,8 +189,7 @@ function recordTemplate(record: RecordItem, order: number): string {
     </article>`;
 }
 
-function updateFilterTabs(): void {
-  const dayStats = calculateStatistics(dateRecords());
+function updateFilterTabs(dayStats: ReturnType<typeof calculateStatistics>): void {
   countAll.textContent = String(dayStats.totalCount);
   countSuccess.textContent = String(dayStats.successCount);
   countFail.textContent = String(dayStats.failCount);
@@ -199,32 +203,76 @@ function updateFilterTabs(): void {
   });
 }
 
+function refreshStatistics(stats: ReturnType<typeof calculateStatistics>): void {
+  dataStat.textContent = `${displayNumber(stats.totalMb / 1024)} GB · ${displayNumber(stats.totalMb)} MB`;
+  lengthStat.textContent = `${displayNumber(stats.totalSeconds / 3600)} 시간 · ${displayNumber(stats.totalSeconds)} 초`;
+}
+
+function updateStatsOnly(): void {
+  const dayRecords = getDayRecords();
+  const dayStats = calculateStatistics(dayRecords);
+  updateFilterTabs(dayStats);
+  const visible = getVisibleRecords(dayRecords);
+  const filteredStats = selectedResultFilter === "all" ? dayStats : calculateStatistics(visible);
+  refreshStatistics(filteredStats);
+}
+
+function updateOrderNumbers(): void {
+  const dayRecords = getDayRecords();
+  const dayCount = dayRecords.length;
+  const orderMap = new Map<string, number>();
+  for (let i = 0; i < dayCount; i++) {
+    orderMap.set(dayRecords[i].id, dayCount - i);
+  }
+  list.querySelectorAll<HTMLElement>(".record-row").forEach((row) => {
+    const id = row.dataset.id;
+    if (!id) return;
+    const order = orderMap.get(id);
+    const orderEl = row.querySelector<HTMLElement>(".record-order");
+    if (orderEl && order !== undefined) {
+      orderEl.textContent = String(order);
+      orderEl.setAttribute("aria-label", `기록 번호 ${order}`);
+    }
+  });
+}
+
+function updateRowResultUI(row: HTMLElement, result: RecordResult): void {
+  const successBtn = row.querySelector<HTMLButtonElement>("[data-result='success']");
+  const failBtn = row.querySelector<HTMLButtonElement>("[data-result='fail']");
+  const isSuccess = result === "success";
+  const isFail = result === "fail";
+  if (successBtn) {
+    successBtn.classList.toggle("selected", isSuccess);
+    successBtn.setAttribute("aria-pressed", isSuccess ? "true" : "false");
+    successBtn.textContent = isSuccess ? "✓ 성공" : "성공";
+  }
+  if (failBtn) {
+    failBtn.classList.toggle("selected", isFail);
+    failBtn.setAttribute("aria-pressed", isFail ? "true" : "false");
+    failBtn.textContent = isFail ? "✓ 실패" : "실패";
+  }
+}
+
 function render(): void {
   filter.value = selectedDate;
-  const visible = filteredRecords();
-  const orderMap = getDayRecordOrderMap();
+  const dayRecords = getDayRecords();
+  const dayCount = dayRecords.length;
 
-  updateFilterTabs();
-  refreshStatistics();
-  list.innerHTML = visible.length === 0
-    ? `<p class="empty-state">${emptyMessage()}</p>`
-    : visible.map((record) => recordTemplate(record, orderMap.get(record.id) ?? 1)).join("");
-}
-
-function refreshStatistics(): void {
-  const filteredStats = calculateStatistics(filteredRecords());
-
-  dataStat.textContent = `${displayNumber(filteredStats.totalMb / 1024)} GB · ${displayNumber(filteredStats.totalMb)} MB`;
-  lengthStat.textContent = `${displayNumber(filteredStats.totalSeconds / 3600)} 시간 · ${displayNumber(filteredStats.totalSeconds)} 초`;
-}
-
-function updateRecord(id: string, update: Partial<RecordItem>, rerender = true): void {
-  records = records.map((record) => record.id === id ? { ...record, ...update } : record);
-  persist();
-  if (rerender) render(); else {
-    updateFilterTabs();
-    refreshStatistics();
+  const orderMap = new Map<string, number>();
+  for (let i = 0; i < dayCount; i++) {
+    orderMap.set(dayRecords[i].id, dayCount - i);
   }
+
+  const dayStats = calculateStatistics(dayRecords);
+  updateFilterTabs(dayStats);
+
+  const visible = getVisibleRecords(dayRecords);
+  const filteredStats = selectedResultFilter === "all" ? dayStats : calculateStatistics(visible);
+  refreshStatistics(filteredStats);
+
+  list.innerHTML = visible.length === 0
+    ? `<p class="empty-state">${emptyMessage(dayCount)}</p>`
+    : visible.map((record) => recordTemplate(record, orderMap.get(record.id) ?? 1)).join("");
 }
 
 function createId(): string {
@@ -233,13 +281,33 @@ function createId(): string {
 }
 
 function addRecord(): void {
-  records = [{ id: createId(), timestamp: Date.now(), result: null, dataMb: null, lengthSeconds: null }, ...records];
+  const newRecord: RecordItem = {
+    id: createId(),
+    timestamp: Date.now(),
+    result: null,
+    dataMb: null,
+    lengthSeconds: null,
+  };
+  records = [newRecord, ...records];
   persist();
-  if (selectedResultFilter === "success" || selectedResultFilter === "fail") {
-    selectedResultFilter = "all";
-  }
   setStatus("기록을 추가했습니다.");
-  render();
+
+  if (selectedResultFilter !== "all" || kstDate(newRecord.timestamp) !== selectedDate) {
+    selectedResultFilter = "all";
+    render();
+    return;
+  }
+
+  const dayRecords = getDayRecords();
+  const dayCount = dayRecords.length;
+
+  const emptyEl = list.querySelector(".empty-state");
+  if (emptyEl) {
+    list.innerHTML = "";
+  }
+
+  list.insertAdjacentHTML("afterbegin", recordTemplate(newRecord, dayCount));
+  updateStatsOnly();
 }
 
 root.addEventListener("click", (event) => {
@@ -260,16 +328,55 @@ root.addEventListener("click", (event) => {
     const row = button.closest<HTMLElement>(".record-row");
     const result = button.dataset.result as Exclude<RecordResult, null> | undefined;
     if (row !== null && (result === "success" || result === "fail")) {
-      const current = records.find((record) => record.id === row.dataset.id);
-      updateRecord(row.dataset.id ?? "", { result: current?.result === result ? null : result });
+      const id = row.dataset.id ?? "";
+      const current = records.find((record) => record.id === id);
+      if (!current) return;
+      const nextResult = current.result === result ? null : result;
+      current.result = nextResult;
+      persist(true);
+
+      if (selectedResultFilter === "all") {
+        updateRowResultUI(row, nextResult);
+        updateStatsOnly();
+      } else {
+        const isStillVisible =
+          (selectedResultFilter === "success" && nextResult === "success") ||
+          (selectedResultFilter === "fail" && nextResult === "fail") ||
+          (selectedResultFilter === "unspecified" && nextResult === null);
+
+        if (isStillVisible) {
+          updateRowResultUI(row, nextResult);
+          updateStatsOnly();
+        } else {
+          row.remove();
+          const dayRecords = getDayRecords();
+          const visible = getVisibleRecords(dayRecords);
+          if (visible.length === 0) {
+            list.innerHTML = `<p class="empty-state">${emptyMessage(dayRecords.length)}</p>`;
+          }
+          updateStatsOnly();
+        }
+      }
     }
     return;
   }
   if (action === "delete") {
     const row = button.closest<HTMLElement>(".record-row");
     if (row !== null && window.confirm("이 기록을 삭제할까요?")) {
-      records = records.filter((record) => record.id !== row.dataset.id);
-      persist(); setStatus("기록을 삭제했습니다."); render();
+      const id = row.dataset.id ?? "";
+      records = records.filter((record) => record.id !== id);
+      persist(true);
+      setStatus("기록을 삭제했습니다.");
+
+      row.remove();
+      const dayRecords = getDayRecords();
+      const visible = getVisibleRecords(dayRecords);
+      if (visible.length === 0) {
+        list.innerHTML = `<p class="empty-state">${emptyMessage(dayRecords.length)}</p>`;
+      } else {
+        updateOrderNumbers();
+      }
+      updateStatsOnly();
     }
     return;
   }
@@ -292,17 +399,27 @@ root.addEventListener("click", (event) => {
   if (action === "import") { void handleImport(); }
 });
 
-function syncNumberInput(input: HTMLInputElement, rerender: boolean): void {
+function syncNumberInput(input: HTMLInputElement, isChange = false): void {
   if (input.dataset.field === undefined) return;
   const row = input.closest<HTMLElement>(".record-row");
   if (row === null || row.dataset.id === undefined) return;
+  const target = records.find((record) => record.id === row.dataset.id);
+  if (!target) return;
+
   const raw = input.value.trim();
   const value = raw === "" ? null : Number(raw);
+  const field = input.dataset.field as "dataMb" | "lengthSeconds";
+
   if (value !== null && (!Number.isFinite(value) || value < 0)) {
-    setStatus("0 이상의 숫자만 입력할 수 있습니다.", true); render(); return;
+    setStatus("0 이상의 숫자만 입력할 수 있습니다.", true);
+    input.value = numberValue(target[field]);
+    return;
   }
-  const field = input.dataset.field;
-  if (field === "dataMb" || field === "lengthSeconds") updateRecord(row.dataset.id, { [field]: value }, rerender);
+
+  setStatus();
+  target[field] = value;
+  persist(isChange);
+  updateStatsOnly();
 }
 
 list.addEventListener("input", (event) => {
@@ -331,7 +448,9 @@ function resetCopyButton(): void {
 
 async function openExportDialog(): Promise<void> {
   try {
-    exportText.value = await exportRecords(filteredRecords());
+    const dayRecords = getDayRecords();
+    const visible = getVisibleRecords(dayRecords);
+    exportText.value = await exportRecords(visible);
     exportFeedback.textContent = "";
     exportFeedback.classList.remove("error");
     resetCopyButton();
@@ -384,3 +503,4 @@ async function handleImport(): Promise<void> {
 }
 
 render();
+

@@ -731,8 +731,6 @@ dialog article>footer {
   }
 
   .record-row {
-    grid-template-columns: auto 1fr auto;
-    gap: .5rem;
     padding: .4rem;
   }
 
@@ -755,7 +753,6 @@ dialog article>footer {
 
   .metrics-fields {
     gap: .35rem;
-    padding-left: 0;
   }
 
   .inline-field input {
@@ -802,7 +799,6 @@ dialog article>footer {
   }
 
   .record-row {
-    grid-template-columns: auto 1fr auto;
     gap: .35rem;
     padding: .35rem;
   }
@@ -833,7 +829,6 @@ dialog article>footer {
 
   .metrics-fields {
     gap: .25rem;
-    padding-left: 0;
   }
 
   .inline-field {

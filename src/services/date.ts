@@ -1,11 +1,25 @@
-const KST = "Asia/Seoul";
+const kstFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+  hourCycle: "h23",
+});
 
 function parts(timestamp: number): Record<string, string> {
-  return Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
-    timeZone: KST, year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-    hour12: false, hourCycle: "h23",
-  }).formatToParts(new Date(timestamp)).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  const formattedParts = kstFormatter.formatToParts(new Date(timestamp));
+  const record: Record<string, string> = {};
+  for (let i = 0; i < formattedParts.length; i++) {
+    const part = formattedParts[i];
+    if (part.type !== "literal") {
+      record[part.type] = part.value;
+    }
+  }
+  return record;
 }
 
 export function kstDate(timestamp: number): string {
@@ -19,5 +33,7 @@ export function kstTime(timestamp: number): string {
   return `${hour}:${value.minute}:${value.second}`;
 }
 
-export function todayKst(): string { return kstDate(Date.now()); }
+export function todayKst(): string {
+  return kstDate(Date.now());
+}
 

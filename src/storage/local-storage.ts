@@ -13,6 +13,12 @@ export function loadData(): AppData {
   }
 }
 
-export function saveData(data: AppData): void {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch { /* UI stays usable if storage is blocked. */ }
+export function saveData(data: AppData): boolean {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    return true;
+  } catch (error) {
+    console.error("Failed to save data to localStorage:", error);
+    return false;
+  }
 }
