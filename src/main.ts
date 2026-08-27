@@ -39,7 +39,7 @@ root.innerHTML = `
         <span class="filter-count" id="count-fail">0</span>
       </button>
       <button type="button" class="filter-tab filter-unspecified" data-action="filter-result" data-filter="unspecified" role="tab" aria-selected="false">
-        <span class="filter-label">— 미지정</span>
+        <span class="filter-label">미지정</span>
         <span class="filter-count" id="count-unspecified">0</span>
       </button>
     </div>
