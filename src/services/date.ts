@@ -33,7 +33,32 @@ export function kstTime(timestamp: number): string {
   return `${hour}:${value.minute}:${value.second}`;
 }
 
+export interface KstTimeParts {
+  hour: string;
+  minute: string;
+  second: string;
+}
+
+export function kstTimeParts(timestamp: number): KstTimeParts {
+  const value = parts(timestamp);
+  const hour = value.hour === "24" ? "00" : value.hour;
+  return {
+    hour: hour.padStart(2, "0"),
+    minute: value.minute.padStart(2, "0"),
+    second: value.second.padStart(2, "0"),
+  };
+}
+
+export function createKstTimestamp(dateStr: string, hour: number, minute: number, second: number): number {
+  const h = String(hour).padStart(2, "0");
+  const m = String(minute).padStart(2, "0");
+  const s = String(second).padStart(2, "0");
+  const iso = `${dateStr}T${h}:${m}:${s}+09:00`;
+  return Date.parse(iso);
+}
+
 export function todayKst(): string {
   return kstDate(Date.now());
 }
+
 

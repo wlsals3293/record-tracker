@@ -1,7 +1,7 @@
 import "@picocss/pico/css/pico.min.css";
 import "./styles/main.css";
 import { APP_DATA_VERSION, type RecordItem, type RecordResult } from "./models/record";
-import { kstDate, kstTime, todayKst } from "./services/date";
+import { createKstTimestamp, kstDate, kstTime, kstTimeParts, todayKst } from "./services/date";
 import { calculateStatistics, displayNumber } from "./services/statistics";
 import { exportRecords, importRecords } from "./services/transfer";
 import { loadData, saveData } from "./storage/local-storage";
@@ -86,6 +86,38 @@ root.innerHTML = `
       <footer><button type="button" data-action="import">가져오기 병합</button></footer>
     </article>
   </dialog>
+  <dialog id="edit-time-dialog" aria-labelledby="edit-time-title">
+    <article class="time-edit-modal">
+      <header>
+        <h3 id="edit-time-title">기록 시간 수정</h3>
+        <button type="button" class="close-button" data-action="close-dialog" aria-label="닫기">✕</button>
+      </header>
+      <p class="time-edit-description">수정할 시간을 시, 분, 초 단위로 입력하세요.</p>
+      <form id="edit-time-form" method="dialog" novalidate>
+        <div class="time-inputs-wrapper">
+          <div class="time-segment-field" id="field-hour">
+            <input id="time-hour" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="00" aria-label="시 (00-23)" autocomplete="off" />
+            <span class="time-segment-label">시</span>
+          </div>
+          <span class="time-colon" aria-hidden="true">:</span>
+          <div class="time-segment-field" id="field-minute">
+            <input id="time-minute" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="00" aria-label="분 (00-59)" autocomplete="off" />
+            <span class="time-segment-label">분</span>
+          </div>
+          <span class="time-colon" aria-hidden="true">:</span>
+          <div class="time-segment-field" id="field-second">
+            <input id="time-second" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="00" aria-label="초 (00-59)" autocomplete="off" />
+            <span class="time-segment-label">초</span>
+          </div>
+        </div>
+        <div id="edit-time-feedback" class="dialog-feedback" role="alert" aria-live="polite"></div>
+        <footer>
+          <button type="button" class="secondary outline" data-action="close-dialog">취소</button>
+          <button type="submit" class="primary" data-action="save-time">저장</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
   <div class="record-dock"><button id="add-record" type="button">기록</button></div>
 `;
 
@@ -105,7 +137,20 @@ const countAll = required<HTMLElement>("#count-all");
 const countSuccess = required<HTMLElement>("#count-success");
 const countFail = required<HTMLElement>("#count-fail");
 const countUnspecified = required<HTMLElement>("#count-unspecified");
+
+const editTimeDialog = required<HTMLDialogElement>("#edit-time-dialog");
+const editTimeTitle = required<HTMLElement>("#edit-time-title");
+const editTimeForm = required<HTMLFormElement>("#edit-time-form");
+const timeHourInput = required<HTMLInputElement>("#time-hour");
+const timeMinuteInput = required<HTMLInputElement>("#time-minute");
+const timeSecondInput = required<HTMLInputElement>("#time-second");
+const fieldHour = required<HTMLElement>("#field-hour");
+const fieldMinute = required<HTMLElement>("#field-minute");
+const fieldSecond = required<HTMLElement>("#field-second");
+const editTimeFeedback = required<HTMLElement>("#edit-time-feedback");
+
 let copyTimeoutId: number | null = null;
+let editingRecordId: string | null = null;
 
 function required<T extends Element>(selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -310,7 +355,175 @@ function addRecord(): void {
   updateStatsOnly();
 }
 
+function clearTimeErrors(): void {
+  fieldHour.classList.remove("has-error");
+  fieldMinute.classList.remove("has-error");
+  fieldSecond.classList.remove("has-error");
+  editTimeFeedback.textContent = "";
+  editTimeFeedback.classList.remove("error");
+}
+
+function setTimeError(message: string, invalidField?: HTMLElement, inputToFocus?: HTMLInputElement): void {
+  clearTimeErrors();
+  if (invalidField) invalidField.classList.add("has-error");
+  editTimeFeedback.textContent = message;
+  editTimeFeedback.classList.add("error");
+  if (inputToFocus) {
+    inputToFocus.focus();
+    inputToFocus.select();
+  }
+}
+
+function openTimeEditDialog(timeEl: HTMLElement): void {
+  const row = timeEl.closest<HTMLElement>(".record-row");
+  if (!row || !row.dataset.id) return;
+  const id = row.dataset.id;
+  const targetRecord = records.find((r) => r.id === id);
+  if (!targetRecord) return;
+
+  editingRecordId = id;
+  const orderEl = row.querySelector<HTMLElement>(".record-order");
+  const order = orderEl?.textContent?.trim() ?? "";
+  editTimeTitle.textContent = order ? `${order}번 기록 시간 수정` : "기록 시간 수정";
+
+  const parts = kstTimeParts(targetRecord.timestamp);
+  timeHourInput.value = parts.hour;
+  timeMinuteInput.value = parts.minute;
+  timeSecondInput.value = parts.second;
+
+  clearTimeErrors();
+  editTimeDialog.showModal();
+
+  setTimeout(() => {
+    timeHourInput.focus();
+    timeHourInput.select();
+  }, 50);
+}
+
+function handleTimeSegmentInput(
+  currentInput: HTMLInputElement,
+  nextInput: HTMLInputElement | null
+): void {
+  const sanitized = currentInput.value.replace(/\D/g, "").slice(0, 2);
+  currentInput.value = sanitized;
+  clearTimeErrors();
+
+  if (sanitized.length === 2 && nextInput) {
+    nextInput.focus();
+    nextInput.select();
+  }
+}
+
+function handleTimeSegmentKeydown(
+  event: KeyboardEvent,
+  currentInput: HTMLInputElement,
+  prevInput: HTMLInputElement | null,
+  nextInput: HTMLInputElement | null
+): void {
+  if (event.key === "ArrowRight") {
+    if (currentInput.selectionStart === currentInput.value.length && nextInput) {
+      event.preventDefault();
+      nextInput.focus();
+      nextInput.select();
+    }
+  } else if (event.key === "ArrowLeft") {
+    if (currentInput.selectionStart === 0 && prevInput) {
+      event.preventDefault();
+      prevInput.focus();
+      prevInput.select();
+    }
+  } else if (event.key === "Backspace") {
+    if (currentInput.value === "" && prevInput) {
+      event.preventDefault();
+      prevInput.focus();
+      prevInput.select();
+    }
+  }
+}
+
+function saveTimeEdit(): boolean {
+  if (!editingRecordId) return false;
+  const target = records.find((r) => r.id === editingRecordId);
+  if (!target) {
+    editTimeDialog.close();
+    return false;
+  }
+
+  const hStr = timeHourInput.value.trim();
+  const mStr = timeMinuteInput.value.trim();
+  const sStr = timeSecondInput.value.trim();
+
+  if (hStr === "" || isNaN(Number(hStr))) {
+    setTimeError("시를 입력해 주세요.", fieldHour, timeHourInput);
+    return false;
+  }
+  const h = Number(hStr);
+  if (!Number.isInteger(h) || h < 0 || h > 23) {
+    setTimeError("시는 00부터 23까지 입력할 수 있습니다.", fieldHour, timeHourInput);
+    return false;
+  }
+
+  if (mStr === "" || isNaN(Number(mStr))) {
+    setTimeError("분을 입력해 주세요.", fieldMinute, timeMinuteInput);
+    return false;
+  }
+  const m = Number(mStr);
+  if (!Number.isInteger(m) || m < 0 || m > 59) {
+    setTimeError("분은 00부터 59까지 입력할 수 있습니다.", fieldMinute, timeMinuteInput);
+    return false;
+  }
+
+  if (sStr === "" || isNaN(Number(sStr))) {
+    setTimeError("초를 입력해 주세요.", fieldSecond, timeSecondInput);
+    return false;
+  }
+  const s = Number(sStr);
+  if (!Number.isInteger(s) || s < 0 || s > 59) {
+    setTimeError("초는 00부터 59까지 입력할 수 있습니다.", fieldSecond, timeSecondInput);
+    return false;
+  }
+
+  const recordDate = kstDate(target.timestamp);
+  const newTimestamp = createKstTimestamp(recordDate, h, m, s);
+
+  target.timestamp = newTimestamp;
+  persist(true);
+  editTimeDialog.close();
+  editingRecordId = null;
+  setStatus("기록 시간을 수정했습니다.");
+  render();
+  return true;
+}
+
+timeHourInput.addEventListener("input", () => handleTimeSegmentInput(timeHourInput, timeMinuteInput));
+timeMinuteInput.addEventListener("input", () => handleTimeSegmentInput(timeMinuteInput, timeSecondInput));
+timeSecondInput.addEventListener("input", () => handleTimeSegmentInput(timeSecondInput, null));
+
+timeHourInput.addEventListener("keydown", (e) => handleTimeSegmentKeydown(e, timeHourInput, null, timeMinuteInput));
+timeMinuteInput.addEventListener("keydown", (e) => handleTimeSegmentKeydown(e, timeMinuteInput, timeHourInput, timeSecondInput));
+timeSecondInput.addEventListener("keydown", (e) => handleTimeSegmentKeydown(e, timeSecondInput, timeMinuteInput, null));
+
+[timeHourInput, timeMinuteInput, timeSecondInput].forEach((input) => {
+  input.addEventListener("focus", () => input.select());
+});
+
+editTimeForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveTimeEdit();
+});
+
+editTimeDialog.addEventListener("click", (event) => {
+  if (event.target === editTimeDialog) {
+    editTimeDialog.close();
+  }
+});
+
 root.addEventListener("click", (event) => {
+  const timeEl = (event.target as Element).closest<HTMLElement>(".record-row time");
+  if (timeEl !== null) {
+    openTimeEditDialog(timeEl);
+    return;
+  }
   const button = (event.target as Element).closest<HTMLButtonElement>("button");
   if (button === null) return;
   const action = button.dataset.action;
