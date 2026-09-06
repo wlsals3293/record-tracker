@@ -93,6 +93,8 @@ const root = document.querySelector<HTMLElement>("#app") ?? missingRoot();
 let records = loadData().records;
 let selectedDate = todayKst();
 let selectedResultFilter: ResultFilter = "all";
+let isSelectionMode = false;
+const selectedRecordIds = new Set<string>();
 
 function missingRoot(): never { throw new Error("Application root is missing."); }
 
@@ -128,18 +130,26 @@ root.innerHTML = `
     </div>
   </section>
   <section class="stats" aria-label="선택한 날짜의 통계">
-    <div><strong>데이터</strong><span id="data-stat">0 GB · 0 MB</span></div>
-    <div><strong>길이</strong><span id="length-stat">0 시간 · 0 초</span></div>
+    <div>
+      <strong>데이터</strong>
+      <div class="stat-value-group">
+        <span class="stat-main" id="data-stat">0 GB · 0 MB</span>
+        <span class="stat-selected" id="data-stat-selected"></span>
+      </div>
+    </div>
+    <div>
+      <strong>길이</strong>
+      <div class="stat-value-group">
+        <span class="stat-main" id="length-stat">0 시간 · 0 초</span>
+        <span class="stat-selected" id="length-stat-selected"></span>
+      </div>
+    </div>
   </section>
   <p id="status" class="status" role="status" aria-live="polite"></p>
   <section class="records-section" aria-label="기록 목록">
     <div class="list-header">
-      <h2>기록 목록</h2>
-      <div class="list-actions" aria-label="기록 관리">
-        <button type="button" class="secondary outline" data-action="open-export">내보내기</button>
-        <button type="button" class="secondary outline" data-action="open-import">가져오기</button>
-        <button type="button" class="danger-action" data-action="clear-all">전체 삭제</button>
-      </div>
+      <h2 id="list-title">기록 목록</h2>
+      <div class="list-actions" id="list-actions" aria-label="기록 관리"></div>
     </div>
     <div id="record-list" class="record-list"></div>
   </section>
@@ -149,7 +159,7 @@ root.innerHTML = `
         <h3 id="export-title">기록 내보내기</h3>
         <button type="button" class="close-button" data-action="close-dialog" aria-label="닫기">✕</button>
       </header>
-      <p>선택한 날짜 및 조건의 기록을 압축했습니다. 문자열을 복사해 전달하세요.</p>
+      <p id="export-description">선택한 날짜 및 조건의 기록을 압축했습니다. 문자열을 복사해 전달하세요.</p>
       <label for="export-text">전송 문자열</label>
       <textarea id="export-text" rows="5" readonly spellcheck="false"></textarea>
       <div id="export-feedback" class="dialog-feedback" role="status" aria-live="polite"></div>
@@ -201,16 +211,43 @@ root.innerHTML = `
       </form>
     </article>
   </dialog>
+  <dialog id="memo-dialog" aria-labelledby="memo-title">
+    <article class="memo-modal">
+      <header>
+        <h3 id="memo-title">기록 메모</h3>
+        <button type="button" class="close-button" data-action="close-dialog" aria-label="닫기">✕</button>
+      </header>
+      <p class="memo-description" id="memo-description">이 기록에 대한 메모를 입력하세요.</p>
+      <form id="memo-form" method="dialog">
+        <label for="memo-text" class="visually-hidden">메모 내용</label>
+        <textarea id="memo-text" class="memo-textarea" rows="5" placeholder="메모를 입력하세요..." maxlength="2000" spellcheck="false"></textarea>
+        <div class="memo-dialog-footer">
+          <div class="memo-dialog-secondary-actions">
+            <button type="button" class="danger-action" id="memo-clear-btn" data-action="clear-memo">메모 삭제</button>
+          </div>
+          <div class="memo-dialog-primary-actions">
+            <button type="button" class="secondary outline" data-action="close-dialog">취소</button>
+            <button type="submit" class="primary" data-action="save-memo">저장</button>
+          </div>
+        </div>
+      </form>
+    </article>
+  </dialog>
   <div class="record-dock"><button id="add-record" type="button">기록</button></div>
 `;
 
 const list = required<HTMLElement>("#record-list");
 const filter = required<HTMLInputElement>("#date-filter");
 const dataStat = required<HTMLElement>("#data-stat");
+const dataStatSelected = required<HTMLElement>("#data-stat-selected");
 const lengthStat = required<HTMLElement>("#length-stat");
+const lengthStatSelected = required<HTMLElement>("#length-stat-selected");
 const status = required<HTMLElement>("#status");
+const listTitle = required<HTMLElement>("#list-title");
+const listActions = required<HTMLElement>("#list-actions");
 
 const exportDialog = required<HTMLDialogElement>("#export-dialog");
+const exportDescription = required<HTMLElement>("#export-description");
 const importDialog = required<HTMLDialogElement>("#import-dialog");
 const exportText = required<HTMLTextAreaElement>("#export-text");
 const importText = required<HTMLTextAreaElement>("#import-text");
@@ -232,8 +269,16 @@ const fieldMinute = required<HTMLElement>("#field-minute");
 const fieldSecond = required<HTMLElement>("#field-second");
 const editTimeFeedback = required<HTMLElement>("#edit-time-feedback");
 
+const memoDialog = required<HTMLDialogElement>("#memo-dialog");
+const memoTitle = required<HTMLElement>("#memo-title");
+const memoDescription = required<HTMLElement>("#memo-description");
+const memoForm = required<HTMLFormElement>("#memo-form");
+const memoText = required<HTMLTextAreaElement>("#memo-text");
+const memoClearBtn = required<HTMLButtonElement>("#memo-clear-btn");
+
 let copyTimeoutId: number | null = null;
 let editingRecordId: string | null = null;
+let editingMemoRecordId: string | null = null;
 
 function required<T extends Element>(selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -288,17 +333,33 @@ function emptyMessage(dayTotal: number): string {
   return "표시할 기록이 없습니다.";
 }
 
+const MEMO_EMPTY_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+const MEMO_ACTIVE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" fill="currentColor" fill-opacity="0.35"/><line x1="6" y1="9" x2="10" y2="9"/><line x1="6" y1="13" x2="8" y2="13"/></svg>`;
+
 function recordTemplate(record: RecordItem, order: number): string {
   const success = record.result === "success";
   const fail = record.result === "fail";
+  const isSelected = selectedRecordIds.has(record.id);
+  const hasMemo = Boolean(record.memo && record.memo.trim().length > 0);
+  const timeStr = kstTime(record.timestamp);
+
+  const checkboxHtml = isSelectionMode
+    ? `<input type="checkbox" class="record-checkbox" data-action="toggle-select" data-id="${record.id}" aria-label="${order}번 기록 선택" ${isSelected ? "checked" : ""} />`
+    : "";
+
+  const memoIcon = hasMemo ? MEMO_ACTIVE_ICON : MEMO_EMPTY_ICON;
+  const memoLabel = hasMemo ? `${order}번 기록 메모 편집 (메모 있음)` : `${order}번 기록 메모 추가`;
+  const memoTitle = hasMemo ? "메모 편집 (메모 있음)" : "메모 추가";
+
   return `
-    <article class="record-row" data-id="${record.id}">
+    <article class="record-row ${isSelected ? "is-selected" : ""}" data-id="${record.id}">
       <div class="record-meta">
+        ${checkboxHtml}
         <span class="record-order" aria-label="기록 번호 ${order}">${order}</span>
-        <time datetime="${new Date(record.timestamp).toISOString()}">${kstTime(record.timestamp)}</time>
+        <time datetime="${new Date(record.timestamp).toISOString()}">${timeStr}</time>
       </div>
       <div class="record-main">
-        <div class="result-buttons" aria-label="${kstTime(record.timestamp)} 결과">
+        <div class="result-buttons" aria-label="${timeStr} 결과">
           <button type="button" class="result success ${success ? "selected" : ""}" data-action="result" data-result="success" aria-pressed="${success}">${success ? "✓ 성공" : "성공"}</button>
           <button type="button" class="result fail ${fail ? "selected" : ""}" data-action="result" data-result="fail" aria-pressed="${fail}">${fail ? "✓ 실패" : "실패"}</button>
         </div>
@@ -307,13 +368,18 @@ function recordTemplate(record: RecordItem, order: number): string {
           <label class="inline-field length-field">길이 <input type="number" min="0" step="1" inputmode="numeric" aria-label="Length seconds" data-field="lengthSeconds" value="${numberValue(record.lengthSeconds)}" /> <span>초</span></label>
         </div>
       </div>
-      <button type="button" class="delete-button" data-action="delete" aria-label="${kstTime(record.timestamp)} 기록 삭제" title="기록 삭제">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-          <line x1="10" y1="11" x2="10" y2="17" />
-          <line x1="14" y1="11" x2="14" y2="17" />
-        </svg>
-      </button>
+      <div class="record-actions">
+        <button type="button" class="memo-button ${hasMemo ? "has-memo" : ""}" data-action="memo" aria-label="${memoLabel}" title="${memoTitle}">
+          ${memoIcon}
+        </button>
+        <button type="button" class="delete-button" data-action="delete" aria-label="${timeStr} 기록 삭제" title="기록 삭제">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <line x1="10" y1="11" x2="10" y2="17" />
+            <line x1="14" y1="11" x2="14" y2="17" />
+          </svg>
+        </button>
+      </div>
     </article>`;
 }
 
@@ -331,9 +397,28 @@ function updateFilterTabs(dayStats: ReturnType<typeof calculateStatistics>): voi
   });
 }
 
-function refreshStatistics(stats: ReturnType<typeof calculateStatistics>): void {
+function refreshStatistics(
+  stats: ReturnType<typeof calculateStatistics>,
+  selectedStats: ReturnType<typeof calculateStatistics> | null
+): void {
   dataStat.textContent = `${displayNumber(stats.totalMb / 1024)} GB · ${displayNumber(stats.totalMb)} MB`;
   lengthStat.textContent = `${displayNumber(stats.totalSeconds / 3600)} 시간 · ${displayNumber(stats.totalSeconds)} 초`;
+
+  if (isSelectionMode && selectedStats !== null && selectedRecordIds.size > 0) {
+    dataStatSelected.textContent = `(${displayNumber(selectedStats.totalMb / 1024)} GB · ${displayNumber(selectedStats.totalMb)} MB)`;
+    dataStatSelected.setAttribute("aria-label", `선택 통계: ${displayNumber(selectedStats.totalMb / 1024)} GB, ${displayNumber(selectedStats.totalMb)} MB`);
+    lengthStatSelected.textContent = `(${displayNumber(selectedStats.totalSeconds / 3600)} 시간 · ${displayNumber(selectedStats.totalSeconds)} 초)`;
+    lengthStatSelected.setAttribute("aria-label", `선택 통계: ${displayNumber(selectedStats.totalSeconds / 3600)} 시간, ${displayNumber(selectedStats.totalSeconds)} 초`);
+  } else {
+    dataStatSelected.textContent = "";
+    dataStatSelected.removeAttribute("aria-label");
+    lengthStatSelected.textContent = "";
+    lengthStatSelected.removeAttribute("aria-label");
+  }
+}
+
+function getSelectedRecords(): RecordItem[] {
+  return records.filter((record) => selectedRecordIds.has(record.id));
 }
 
 function updateStatsOnly(): void {
@@ -342,7 +427,95 @@ function updateStatsOnly(): void {
   updateFilterTabs(dayStats);
   const visible = getVisibleRecords(dayRecords);
   const filteredStats = selectedResultFilter === "all" ? dayStats : calculateStatistics(visible);
-  refreshStatistics(filteredStats);
+  const selectedRecords = isSelectionMode && selectedRecordIds.size > 0 ? getSelectedRecords() : null;
+  const selectedStats = selectedRecords ? calculateStatistics(selectedRecords) : null;
+  refreshStatistics(filteredStats, selectedStats);
+}
+
+function updateListHeaderAndActions(): void {
+  root.classList.toggle("selection-mode", isSelectionMode);
+
+  if (!isSelectionMode) {
+    listTitle.innerHTML = `기록 목록`;
+    listActions.innerHTML = `
+      <button type="button" class="secondary outline" data-action="enter-select">선택</button>
+      <button type="button" class="secondary outline" data-action="open-export">내보내기</button>
+      <button type="button" class="secondary outline" data-action="open-import">가져오기</button>
+      <button type="button" class="danger-action" data-action="clear-all">전체 삭제</button>
+    `;
+    return;
+  }
+
+  const dayRecords = getDayRecords();
+  const visible = getVisibleRecords(dayRecords);
+  const selectedCount = selectedRecordIds.size;
+  const isAllSelected = visible.length > 0 && visible.every((r) => selectedRecordIds.has(r.id));
+
+  listTitle.innerHTML = `기록 목록 <span class="selection-count-badge">${selectedCount}개 선택</span>`;
+  listActions.innerHTML = `
+    <button type="button" class="secondary outline" data-action="toggle-select-all">${isAllSelected ? "전체 해제" : "전체 선택"}</button>
+    <button type="button" class="danger-action" data-action="delete-selected" ${selectedCount === 0 ? "disabled" : ""}>선택 삭제</button>
+    <button type="button" class="secondary outline" data-action="open-export" ${selectedCount === 0 ? "disabled" : ""}>내보내기</button>
+    <button type="button" class="primary" data-action="exit-select">완료</button>
+  `;
+}
+
+function toggleRecordSelection(id: string): void {
+  if (selectedRecordIds.has(id)) {
+    selectedRecordIds.delete(id);
+  } else {
+    selectedRecordIds.add(id);
+  }
+
+  const row = list.querySelector<HTMLElement>(`.record-row[data-id="${id}"]`);
+  if (row) {
+    const isSelected = selectedRecordIds.has(id);
+    row.classList.toggle("is-selected", isSelected);
+    const cb = row.querySelector<HTMLInputElement>(".record-checkbox");
+    if (cb) cb.checked = isSelected;
+  }
+
+  updateListHeaderAndActions();
+  updateStatsOnly();
+}
+
+function toggleSelectAll(): void {
+  const dayRecords = getDayRecords();
+  const visible = getVisibleRecords(dayRecords);
+  if (visible.length === 0) return;
+
+  const isAllSelected = visible.every((r) => selectedRecordIds.has(r.id));
+  if (isAllSelected) {
+    visible.forEach((r) => selectedRecordIds.delete(r.id));
+  } else {
+    visible.forEach((r) => selectedRecordIds.add(r.id));
+  }
+
+  list.querySelectorAll<HTMLElement>(".record-row").forEach((row) => {
+    const id = row.dataset.id;
+    if (id) {
+      const isSelected = selectedRecordIds.has(id);
+      row.classList.toggle("is-selected", isSelected);
+      const cb = row.querySelector<HTMLInputElement>(".record-checkbox");
+      if (cb) cb.checked = isSelected;
+    }
+  });
+
+  updateListHeaderAndActions();
+  updateStatsOnly();
+}
+
+function deleteSelectedRecords(): void {
+  const count = selectedRecordIds.size;
+  if (count === 0) return;
+
+  if (window.confirm(`선택한 ${count}개의 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
+    records = records.filter((record) => !selectedRecordIds.has(record.id));
+    selectedRecordIds.clear();
+    persist(true);
+    setStatus(`선택한 ${count}개의 기록을 삭제했습니다.`);
+    render();
+  }
 }
 
 function updateOrderNumbers(): void {
@@ -360,6 +533,11 @@ function updateOrderNumbers(): void {
     if (orderEl && order !== undefined) {
       orderEl.textContent = String(order);
       orderEl.setAttribute("aria-label", `기록 번호 ${order}`);
+    }
+    const memoBtn = row.querySelector<HTMLButtonElement>(".memo-button");
+    if (memoBtn && order !== undefined) {
+      const hasMemo = memoBtn.classList.contains("has-memo");
+      memoBtn.setAttribute("aria-label", hasMemo ? `${order}번 기록 메모 편집 (메모 있음)` : `${order}번 기록 메모 추가`);
     }
   });
 }
@@ -391,12 +569,16 @@ function render(): void {
     orderMap.set(dayRecords[i].id, dayCount - i);
   }
 
+  updateListHeaderAndActions();
+
   const dayStats = calculateStatistics(dayRecords);
   updateFilterTabs(dayStats);
 
   const visible = getVisibleRecords(dayRecords);
   const filteredStats = selectedResultFilter === "all" ? dayStats : calculateStatistics(visible);
-  refreshStatistics(filteredStats);
+  const selectedRecords = isSelectionMode && selectedRecordIds.size > 0 ? getSelectedRecords() : null;
+  const selectedStats = selectedRecords ? calculateStatistics(selectedRecords) : null;
+  refreshStatistics(filteredStats, selectedStats);
 
   list.innerHTML = visible.length === 0
     ? `<p class="empty-state">${emptyMessage(dayCount)}</p>`
@@ -601,98 +783,292 @@ editTimeDialog.addEventListener("click", (event) => {
   }
 });
 
+function openMemoDialog(id: string): void {
+  const targetRecord = records.find((r) => r.id === id);
+  if (!targetRecord) return;
+
+  editingMemoRecordId = id;
+  const row = list.querySelector<HTMLElement>(`.record-row[data-id="${id}"]`);
+  const orderEl = row?.querySelector<HTMLElement>(".record-order");
+  const order = orderEl?.textContent?.trim() ?? "";
+  const timeStr = kstTime(targetRecord.timestamp);
+
+  memoTitle.textContent = order ? `${order}번 기록 메모` : "기록 메모";
+  memoDescription.textContent = `${timeStr}에 작성된 기록의 메모를 확인하고 편집합니다.`;
+
+  const memoVal = targetRecord.memo ?? "";
+  memoText.value = memoVal;
+  memoClearBtn.style.display = memoVal.trim().length > 0 ? "inline-block" : "none";
+
+  memoDialog.showModal();
+
+  setTimeout(() => {
+    memoText.focus();
+    memoText.setSelectionRange(memoText.value.length, memoText.value.length);
+  }, 50);
+}
+
+function updateRowMemoUI(id: string, hasMemo: boolean): void {
+  const row = list.querySelector<HTMLElement>(`.record-row[data-id="${id}"]`);
+  if (!row) return;
+  const memoBtn = row.querySelector<HTMLButtonElement>(".memo-button");
+  if (!memoBtn) return;
+
+  const orderEl = row.querySelector<HTMLElement>(".record-order");
+  const order = orderEl?.textContent?.trim() ?? "";
+  const memoLabel = hasMemo ? `${order}번 기록 메모 편집 (메모 있음)` : `${order}번 기록 메모 추가`;
+  const memoTitleText = hasMemo ? "메모 편집 (메모 있음)" : "메모 추가";
+
+  memoBtn.classList.toggle("has-memo", hasMemo);
+  memoBtn.setAttribute("aria-label", memoLabel);
+  memoBtn.setAttribute("title", memoTitleText);
+  memoBtn.innerHTML = hasMemo ? MEMO_ACTIVE_ICON : MEMO_EMPTY_ICON;
+}
+
+function saveMemo(): void {
+  if (!editingMemoRecordId) return;
+  const targetRecord = records.find((r) => r.id === editingMemoRecordId);
+  if (!targetRecord) {
+    memoDialog.close();
+    return;
+  }
+
+  const rawText = memoText.value.trim();
+  if (rawText.length > 0) {
+    targetRecord.memo = rawText;
+  } else {
+    delete targetRecord.memo;
+  }
+
+  persist(true);
+  const hasMemo = Boolean(targetRecord.memo && targetRecord.memo.length > 0);
+  updateRowMemoUI(editingMemoRecordId, hasMemo);
+  memoDialog.close();
+  setStatus(hasMemo ? "메모를 저장했습니다." : "메모를 삭제했습니다.");
+  editingMemoRecordId = null;
+}
+
+function clearMemo(): void {
+  if (!editingMemoRecordId) return;
+  const targetRecord = records.find((r) => r.id === editingMemoRecordId);
+  if (!targetRecord) {
+    memoDialog.close();
+    return;
+  }
+
+  if (targetRecord.memo && !window.confirm("이 기록의 메모를 삭제할까요?")) {
+    return;
+  }
+
+  delete targetRecord.memo;
+  persist(true);
+  updateRowMemoUI(editingMemoRecordId, false);
+  memoDialog.close();
+  setStatus("메모를 삭제했습니다.");
+  editingMemoRecordId = null;
+}
+
+memoForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveMemo();
+});
+
+memoDialog.addEventListener("click", (event) => {
+  if (event.target === memoDialog) {
+    memoDialog.close();
+  }
+});
+
+memoDialog.addEventListener("close", () => {
+  editingMemoRecordId = null;
+});
+
+memoText.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    event.preventDefault();
+    saveMemo();
+  }
+});
+
 root.addEventListener("click", (event) => {
-  const timeEl = (event.target as Element).closest<HTMLElement>(".record-row time");
-  if (timeEl !== null) {
+  const target = event.target as Element;
+
+  // Dialog internal buttons
+  const dialogEl = target.closest("dialog");
+  if (dialogEl !== null) {
+    const button = target.closest<HTMLButtonElement>("button");
+    if (button === null) return;
+    const action = button.dataset.action;
+    if (action === "close-dialog") { dialogEl.close(); return; }
+    if (action === "copy-export") { void copyExportText(); return; }
+    if (action === "import") { void handleImport(); return; }
+    if (action === "clear-memo") { clearMemo(); return; }
+    if (action === "save-memo") { saveMemo(); return; }
+    return;
+  }
+
+  // Time click: when NOT in selection mode, open time edit modal
+  const timeEl = target.closest<HTMLElement>(".record-row time");
+  if (!isSelectionMode && timeEl !== null) {
     openTimeEditDialog(timeEl);
     return;
   }
-  const button = (event.target as Element).closest<HTMLButtonElement>("button");
-  if (button === null) return;
-  const action = button.dataset.action;
-  if (button.id === "add-record") { addRecord(); return; }
-  if (action === "today") { selectedDate = todayKst(); setStatus(); render(); return; }
-  if (action === "filter-result") {
-    const nextFilter = button.dataset.filter as ResultFilter | undefined;
-    if (nextFilter && nextFilter !== selectedResultFilter) {
-      selectedResultFilter = nextFilter;
-      render();
+
+  const button = target.closest<HTMLButtonElement>("button");
+  if (button !== null) {
+    const action = button.dataset.action;
+    if (action === "memo") {
+      const row = button.closest<HTMLElement>(".record-row");
+      if (row?.dataset.id) openMemoDialog(row.dataset.id);
+      return;
     }
-    return;
-  }
-  if (action === "result") {
-    const row = button.closest<HTMLElement>(".record-row");
-    const result = button.dataset.result as Exclude<RecordResult, null> | undefined;
-    if (row !== null && (result === "success" || result === "fail")) {
-      const id = row.dataset.id ?? "";
-      const current = records.find((record) => record.id === id);
-      if (!current) return;
-      const nextResult = current.result === result ? null : result;
-      current.result = nextResult;
-      persist(true);
+    if (button.id === "add-record") { addRecord(); return; }
+    if (action === "today") {
+      if (selectedDate !== todayKst()) {
+        if (selectedRecordIds.size > 0) {
+          if (!window.confirm("날짜를 변경하면 현재 선택한 기록이 초기화되고 선택 모드가 해제됩니다. 계속할까요?")) return;
+          isSelectionMode = false;
+          selectedRecordIds.clear();
+        }
+        selectedDate = todayKst();
+        setStatus();
+        render();
+      }
+      return;
+    }
+    if (action === "filter-result") {
+      const nextFilter = button.dataset.filter as ResultFilter | undefined;
+      if (nextFilter && nextFilter !== selectedResultFilter) {
+        if (selectedRecordIds.size > 0) {
+          if (!window.confirm("필터를 변경하면 현재 선택한 기록이 초기화되고 선택 모드가 해제됩니다. 계속할까요?")) return;
+          isSelectionMode = false;
+          selectedRecordIds.clear();
+        }
+        selectedResultFilter = nextFilter;
+        render();
+      }
+      return;
+    }
+    if (action === "enter-select") {
+      isSelectionMode = true;
+      selectedRecordIds.clear();
+      render();
+      return;
+    }
+    if (action === "exit-select") {
+      isSelectionMode = false;
+      selectedRecordIds.clear();
+      render();
+      return;
+    }
+    if (action === "toggle-select-all") {
+      toggleSelectAll();
+      return;
+    }
+    if (action === "delete-selected") {
+      deleteSelectedRecords();
+      return;
+    }
+    if (action === "result") {
+      const row = button.closest<HTMLElement>(".record-row");
+      const result = button.dataset.result as Exclude<RecordResult, null> | undefined;
+      if (row !== null && (result === "success" || result === "fail")) {
+        const id = row.dataset.id ?? "";
+        const current = records.find((record) => record.id === id);
+        if (!current) return;
+        const nextResult = current.result === result ? null : result;
+        current.result = nextResult;
+        persist(true);
 
-      if (selectedResultFilter === "all") {
-        updateRowResultUI(row, nextResult);
-        updateStatsOnly();
-      } else {
-        const isStillVisible =
-          (selectedResultFilter === "success" && nextResult === "success") ||
-          (selectedResultFilter === "fail" && nextResult === "fail") ||
-          (selectedResultFilter === "unspecified" && nextResult === null);
-
-        if (isStillVisible) {
+        if (selectedResultFilter === "all") {
           updateRowResultUI(row, nextResult);
           updateStatsOnly();
         } else {
-          row.remove();
-          const dayRecords = getDayRecords();
-          const visible = getVisibleRecords(dayRecords);
-          if (visible.length === 0) {
-            list.innerHTML = `<p class="empty-state">${emptyMessage(dayRecords.length)}</p>`;
+          const isStillVisible =
+            (selectedResultFilter === "success" && nextResult === "success") ||
+            (selectedResultFilter === "fail" && nextResult === "fail") ||
+            (selectedResultFilter === "unspecified" && nextResult === null);
+
+          if (isStillVisible) {
+            updateRowResultUI(row, nextResult);
+            updateStatsOnly();
+          } else {
+            selectedRecordIds.delete(id);
+            row.remove();
+            const dayRecords = getDayRecords();
+            const visible = getVisibleRecords(dayRecords);
+            if (visible.length === 0) {
+              list.innerHTML = `<p class="empty-state">${emptyMessage(dayRecords.length)}</p>`;
+            }
+            updateListHeaderAndActions();
+            updateStatsOnly();
           }
-          updateStatsOnly();
         }
       }
+      return;
     }
-    return;
-  }
-  if (action === "delete") {
-    const row = button.closest<HTMLElement>(".record-row");
-    if (row !== null && window.confirm("이 기록을 삭제할까요?")) {
-      const id = row.dataset.id ?? "";
-      records = records.filter((record) => record.id !== id);
-      persist(true);
-      setStatus("기록을 삭제했습니다.");
+    if (action === "delete") {
+      const row = button.closest<HTMLElement>(".record-row");
+      if (row !== null && window.confirm("이 기록을 삭제할까요?")) {
+        const id = row.dataset.id ?? "";
+        selectedRecordIds.delete(id);
+        records = records.filter((record) => record.id !== id);
+        persist(true);
+        setStatus("기록을 삭제했습니다.");
 
-      row.remove();
-      const dayRecords = getDayRecords();
-      const visible = getVisibleRecords(dayRecords);
-      if (visible.length === 0) {
-        list.innerHTML = `<p class="empty-state">${emptyMessage(dayRecords.length)}</p>`;
-      } else {
-        updateOrderNumbers();
+        row.remove();
+        const dayRecords = getDayRecords();
+        const visible = getVisibleRecords(dayRecords);
+        if (visible.length === 0) {
+          list.innerHTML = `<p class="empty-state">${emptyMessage(dayRecords.length)}</p>`;
+        } else {
+          updateOrderNumbers();
+        }
+        updateListHeaderAndActions();
+        updateStatsOnly();
       }
-      updateStatsOnly();
+      return;
+    }
+    if (action === "clear-all") {
+      if (window.confirm("모든 날짜의 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.")) {
+        records = [];
+        selectedRecordIds.clear();
+        isSelectionMode = false;
+        persist();
+        setStatus("전체 기록을 삭제했습니다.");
+        render();
+      }
+      return;
+    }
+    if (action === "open-export") { void openExportDialog(); return; }
+    if (action === "open-import") {
+      importText.value = "";
+      importFeedback.textContent = "";
+      importFeedback.classList.remove("error");
+      importDialog.showModal();
+      return;
     }
     return;
   }
-  if (action === "clear-all") {
-    if (window.confirm("모든 날짜의 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.")) {
-      records = []; persist(); setStatus("전체 기록을 삭제했습니다."); render();
+
+  // Row selection interaction in selection mode
+  if (isSelectionMode) {
+    const inputEl = target.closest<HTMLInputElement>("input");
+    if (inputEl !== null) {
+      if (inputEl.classList.contains("record-checkbox")) {
+        const id = inputEl.dataset.id;
+        if (id) toggleRecordSelection(id);
+      }
+      // If number input in metrics-fields, don't toggle selection
+      return;
     }
-    return;
+
+    const row = target.closest<HTMLElement>(".record-row");
+    if (row !== null && row.dataset.id) {
+      toggleRecordSelection(row.dataset.id);
+      return;
+    }
   }
-  if (action === "open-export") { void openExportDialog(); return; }
-  if (action === "open-import") {
-    importText.value = "";
-    importFeedback.textContent = "";
-    importFeedback.classList.remove("error");
-    importDialog.showModal();
-    return;
-  }
-  if (action === "close-dialog") { button.closest<HTMLDialogElement>("dialog")?.close(); return; }
-  if (action === "copy-export") { void copyExportText(); return; }
-  if (action === "import") { void handleImport(); }
 });
 
 function syncNumberInput(input: HTMLInputElement, isChange = false): void {
@@ -727,7 +1103,19 @@ list.addEventListener("change", (event) => {
 });
 
 filter.addEventListener("change", () => {
-  if (filter.value !== "") { selectedDate = filter.value; setStatus(); render(); }
+  if (filter.value !== "" && filter.value !== selectedDate) {
+    if (selectedRecordIds.size > 0) {
+      if (!window.confirm("날짜를 변경하면 현재 선택한 기록이 초기화되고 선택 모드가 해제됩니다. 계속할까요?")) {
+        filter.value = selectedDate;
+        return;
+      }
+      isSelectionMode = false;
+      selectedRecordIds.clear();
+    }
+    selectedDate = filter.value;
+    setStatus();
+    render();
+  }
 });
 
 function resetCopyButton(): void {
@@ -744,9 +1132,21 @@ function resetCopyButton(): void {
 
 async function openExportDialog(): Promise<void> {
   try {
-    const dayRecords = getDayRecords();
-    const visible = getVisibleRecords(dayRecords);
-    exportText.value = await exportRecords(visible);
+    let targetRecords: RecordItem[];
+    if (isSelectionMode) {
+      if (selectedRecordIds.size === 0) {
+        setStatus("내보낼 기록을 먼저 선택해 주세요.", true);
+        return;
+      }
+      targetRecords = records.filter((r) => selectedRecordIds.has(r.id));
+      exportDescription.innerHTML = `선택한 <strong>${targetRecords.length}개</strong>의 기록을 압축했습니다. 문자열을 복사해 전달하세요.`;
+    } else {
+      const dayRecords = getDayRecords();
+      targetRecords = getVisibleRecords(dayRecords);
+      exportDescription.innerHTML = `표시된 <strong>${targetRecords.length}개</strong>의 기록을 압축했습니다. 문자열을 복사해 전달하세요.`;
+    }
+
+    exportText.value = await exportRecords(targetRecords);
     exportFeedback.textContent = "";
     exportFeedback.classList.remove("error");
     resetCopyButton();

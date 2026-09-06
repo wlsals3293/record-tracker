@@ -6,6 +6,7 @@ export interface RecordItem {
   result: RecordResult;
   dataMb: number | null;
   lengthSeconds: number | null;
+  memo?: string;
 }
 
 export interface AppData {
@@ -27,7 +28,8 @@ export function isRecordItem(value: unknown): value is RecordItem {
     typeof value.id === "string" && value.id.length > 0 &&
     typeof value.timestamp === "number" && Number.isFinite(value.timestamp) &&
     (value.result === "success" || value.result === "fail" || value.result === null) &&
-    isNonNegativeNumberOrNull(value.dataMb) && isNonNegativeNumberOrNull(value.lengthSeconds)
+    isNonNegativeNumberOrNull(value.dataMb) && isNonNegativeNumberOrNull(value.lengthSeconds) &&
+    (value.memo === undefined || typeof value.memo === "string")
   );
 }
 
