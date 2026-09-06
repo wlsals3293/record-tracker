@@ -1,16 +1,21 @@
 /* ========================================================================
    Design Tokens — Light & Dark Mode Color System
-   ======================================================================== */
-
-:root,
+   ======================================================================== */:root,
 [data-theme="light"] {
+  color-scheme: light;
   --pico-font-size: 93%;
   --pico-spacing: .75rem;
 
-  /* Primary */
-  --pico-primary: #0f766e;
-  --pico-primary-hover: #0b5d57;
-  --rt-primary-glow: rgba(15, 118, 110, 0.2);
+  /* Primary (Pico default blue) */
+  --pico-primary: #0172ad;
+  --pico-primary-background: #0172ad;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #015887;
+  --pico-primary-hover-background: #02659a;
+  --pico-primary-hover-border: var(--pico-primary-hover-background);
+  --pico-primary-focus: rgba(2, 154, 232, 0.35);
+  --pico-primary-inverse: #fff;
+  --rt-primary-glow: rgba(1, 114, 173, 0.20);
 
   /* App surfaces */
   --rt-bg: #f8fafc;
@@ -49,13 +54,13 @@
   --rt-delete-focus: #ef4444;
 
   /* Memo button */
-  --rt-memo-hover-bg: rgba(15, 118, 110, 0.08);
-  --rt-memo-hover-border: rgba(15, 118, 110, 0.25);
-  --rt-memo-hover-color: #0f766e;
-  --rt-memo-has-bg: rgba(15, 118, 110, 0.10);
-  --rt-memo-has-border: rgba(15, 118, 110, 0.35);
-  --rt-memo-has-color: #0f766e;
-  --rt-memo-focus: rgba(15, 118, 110, 0.35);
+  --rt-memo-hover-bg: rgba(1, 114, 173, 0.08);
+  --rt-memo-hover-border: rgba(1, 114, 173, 0.25);
+  --rt-memo-hover-color: #0172ad;
+  --rt-memo-has-bg: rgba(1, 114, 173, 0.10);
+  --rt-memo-has-border: rgba(1, 114, 173, 0.35);
+  --rt-memo-has-color: #0172ad;
+  --rt-memo-focus: rgba(1, 114, 173, 0.35);
 
   /* Danger action */
   --rt-danger-bg: #dc2626;
@@ -79,18 +84,25 @@
   --rt-dock-border: #e2e8f0;
 
   /* Selection Mode */
-  --rt-selected-bg: rgba(15, 118, 110, 0.06);
-  --rt-selected-border: rgba(15, 118, 110, 0.40);
+  --rt-selected-bg: rgba(1, 114, 173, 0.07);
+  --rt-selected-border: rgba(1, 114, 173, 0.38);
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --pico-font-size: 93%;
   --pico-spacing: .75rem;
 
-  /* Primary */
-  --pico-primary: #14b8a6;
-  --pico-primary-hover: #2dd4bf;
-  --rt-primary-glow: rgba(20, 184, 166, 0.25);
+  /* Primary (Pico dark blue) */
+  --pico-primary: #01aaff;
+  --pico-primary-background: #0172ad;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-hover: #79c0ff;
+  --pico-primary-hover-background: #017fc0;
+  --pico-primary-hover-border: var(--pico-primary-hover-background);
+  --pico-primary-focus: rgba(1, 170, 255, 0.35);
+  --pico-primary-inverse: #fff;
+  --rt-primary-glow: rgba(1, 170, 255, 0.25);
 
   /* App surfaces */
   --rt-bg: #0c1220;
@@ -129,13 +141,13 @@
   --rt-delete-focus: #f87171;
 
   /* Memo button */
-  --rt-memo-hover-bg: rgba(20, 184, 166, 0.12);
-  --rt-memo-hover-border: rgba(20, 184, 166, 0.30);
-  --rt-memo-hover-color: #2dd4bf;
-  --rt-memo-has-bg: rgba(20, 184, 166, 0.16);
-  --rt-memo-has-border: rgba(20, 184, 166, 0.45);
-  --rt-memo-has-color: #2dd4bf;
-  --rt-memo-focus: rgba(20, 184, 166, 0.45);
+  --rt-memo-hover-bg: rgba(1, 170, 255, 0.12);
+  --rt-memo-hover-border: rgba(1, 170, 255, 0.30);
+  --rt-memo-hover-color: #79c0ff;
+  --rt-memo-has-bg: rgba(1, 170, 255, 0.16);
+  --rt-memo-has-border: rgba(1, 170, 255, 0.45);
+  --rt-memo-has-color: #01aaff;
+  --rt-memo-focus: rgba(1, 170, 255, 0.45);
 
   /* Danger action */
   --rt-danger-bg: #b91c1c;
@@ -159,8 +171,8 @@
   --rt-dock-border: #1e293b;
 
   /* Selection Mode */
-  --rt-selected-bg: rgba(20, 184, 166, 0.10);
-  --rt-selected-border: rgba(20, 184, 166, 0.45);
+  --rt-selected-bg: rgba(1, 170, 255, 0.10);
+  --rt-selected-border: rgba(1, 170, 255, 0.40);
 
   /* Pico CSS overrides for dark mode */
   --pico-background-color: var(--rt-bg);
@@ -169,16 +181,23 @@
   --pico-color: var(--rt-text);
   --pico-muted-color: var(--rt-text-muted);
   --pico-secondary-background: rgba(255, 255, 255, 0.06);
-
-  color-scheme: dark;
 }
 
 /* Also respond to system preference when no explicit data-theme is set */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --pico-primary: #14b8a6;
-    --pico-primary-hover: #2dd4bf;
-    --rt-primary-glow: rgba(20, 184, 166, 0.25);
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    color-scheme: dark;
+    --pico-font-size: 93%;
+    --pico-spacing: .75rem;
+    --pico-primary: #01aaff;
+    --pico-primary-background: #0172ad;
+    --pico-primary-border: var(--pico-primary-background);
+    --pico-primary-hover: #79c0ff;
+    --pico-primary-hover-background: #017fc0;
+    --pico-primary-hover-border: var(--pico-primary-hover-background);
+    --pico-primary-focus: rgba(1, 170, 255, 0.35);
+    --pico-primary-inverse: #fff;
+    --rt-primary-glow: rgba(1, 170, 255, 0.25);
     --rt-bg: #0c1220;
     --rt-card-bg: #131d2e;
     --rt-border: #1e293b;
@@ -207,13 +226,13 @@
     --rt-delete-active-border: rgba(248, 113, 113, 0.40);
     --rt-delete-active-color: #fca5a5;
     --rt-delete-focus: #f87171;
-    --rt-memo-hover-bg: rgba(20, 184, 166, 0.12);
-    --rt-memo-hover-border: rgba(20, 184, 166, 0.30);
-    --rt-memo-hover-color: #2dd4bf;
-    --rt-memo-has-bg: rgba(20, 184, 166, 0.16);
-    --rt-memo-has-border: rgba(20, 184, 166, 0.45);
-    --rt-memo-has-color: #2dd4bf;
-    --rt-memo-focus: rgba(20, 184, 166, 0.45);
+    --rt-memo-hover-bg: rgba(1, 170, 255, 0.12);
+    --rt-memo-hover-border: rgba(1, 170, 255, 0.30);
+    --rt-memo-hover-color: #79c0ff;
+    --rt-memo-has-bg: rgba(1, 170, 255, 0.16);
+    --rt-memo-has-border: rgba(1, 170, 255, 0.45);
+    --rt-memo-has-color: #01aaff;
+    --rt-memo-focus: rgba(1, 170, 255, 0.45);
     --rt-danger-bg: #b91c1c;
     --rt-danger-bg-hover: #991b1b;
     --rt-feedback-success: #4ade80;
@@ -229,17 +248,17 @@
     --rt-error-input-glow: rgba(239, 68, 68, 0.20);
     --rt-dock-bg: rgba(12, 18, 32, 0.88);
     --rt-dock-border: #1e293b;
-    --rt-selected-bg: rgba(20, 184, 166, 0.10);
-    --rt-selected-border: rgba(20, 184, 166, 0.45);
+    --rt-selected-bg: rgba(1, 170, 255, 0.10);
+    --rt-selected-border: rgba(1, 170, 255, 0.40);
     --pico-background-color: var(--rt-bg);
     --pico-card-background-color: var(--rt-card-bg);
     --pico-muted-border-color: var(--rt-border);
     --pico-color: var(--rt-text);
     --pico-muted-color: var(--rt-text-muted);
     --pico-secondary-background: rgba(255, 255, 255, 0.06);
-    color-scheme: dark;
   }
 }
+
 
 /* ========================================================================
    Global Resets & Base Styles
@@ -443,8 +462,8 @@ h3 {
 }
 
 .filter-tab.active {
-  background: var(--pico-primary);
-  border-color: var(--pico-primary);
+  background: var(--pico-primary-background, var(--pico-primary));
+  border-color: var(--pico-primary-background, var(--pico-primary));
   color: #ffffff;
   font-weight: 700;
 }
@@ -462,6 +481,12 @@ h3 {
 .filter-tab.filter-unspecified.active {
   background: var(--rt-unspecified);
   border-color: var(--rt-unspecified);
+}
+
+[data-theme="dark"] .filter-tab.filter-unspecified.active {
+  background: #334155;
+  border-color: #475569;
+  color: #f1f5f9;
 }
 
 .filter-label {
@@ -1240,9 +1265,6 @@ dialog article footer button,
   line-height: 1.5;
   border-radius: .45rem;
   resize: vertical;
-  background: var(--rt-card-bg);
-  border: 1px solid var(--rt-border);
-  color: var(--rt-text);
   box-sizing: border-box;
 }
 

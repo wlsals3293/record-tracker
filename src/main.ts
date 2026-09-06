@@ -26,7 +26,7 @@ function applyTheme(pref: ThemePreference): void {
   // Update meta theme-color
   const meta = document.getElementById("meta-theme-color") as HTMLMetaElement | null;
   if (meta) {
-    meta.content = resolved === "dark" ? "#0c1220" : "#0f766e";
+    meta.content = resolved === "dark" ? "#0c1220" : "#f8fafc";
   }
 }
 
@@ -453,10 +453,10 @@ function updateListHeaderAndActions(): void {
 
   listTitle.innerHTML = `기록 목록 <span class="selection-count-badge">${selectedCount}개 선택</span>`;
   listActions.innerHTML = `
-    <button type="button" class="secondary outline" data-action="toggle-select-all">${isAllSelected ? "전체 해제" : "전체 선택"}</button>
-    <button type="button" class="danger-action" data-action="delete-selected" ${selectedCount === 0 ? "disabled" : ""}>선택 삭제</button>
-    <button type="button" class="secondary outline" data-action="open-export" ${selectedCount === 0 ? "disabled" : ""}>내보내기</button>
     <button type="button" class="primary" data-action="exit-select">완료</button>
+    <button type="button" class="secondary outline" data-action="toggle-select-all">${isAllSelected ? "전체 해제" : "전체 선택"}</button>
+    <button type="button" class="secondary outline" data-action="open-export" ${selectedCount === 0 ? "disabled" : ""}>내보내기</button>
+    <button type="button" class="danger-action" data-action="delete-selected" ${selectedCount === 0 ? "disabled" : ""}>삭제</button>
   `;
 }
 
