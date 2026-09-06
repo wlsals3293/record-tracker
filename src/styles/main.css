@@ -1496,6 +1496,37 @@ dialog article footer button,
   .inline-field input {
     width: 3.6rem;
   }
+
+  /* 모바일 가상 키보드 오픈 시 시간 수정 모달이 가려지지 않도록 상단 정렬 */
+  #edit-time-dialog {
+    align-items: flex-start;
+    padding-top: max(2rem, calc(8vh + env(safe-area-inset-top, 0px)));
+    padding-bottom: 1.5rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+  }
+
+  #edit-time-dialog > article {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}
+
+@media (max-height: 500px) {
+  #edit-time-dialog {
+    align-items: flex-start;
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+    padding-bottom: 1rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+  }
+
+  #edit-time-dialog > article {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
 }
 
 @media (max-width: 390px) {
