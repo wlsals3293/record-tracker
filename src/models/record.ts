@@ -1,3 +1,5 @@
+import { kstDate } from "../services/date";
+
 export type RecordResult = "success" | "fail" | null;
 
 export interface RecordItem {
@@ -9,12 +11,18 @@ export interface RecordItem {
   memo?: string;
 }
 
-export interface AppData {
-  version: number;
+export interface Session {
+  name?: string;
   records: RecordItem[];
 }
 
-export const APP_DATA_VERSION = 1;
+export interface AppData {
+  version: number;
+  sessionsByDate: Record<string, Session[]>;
+}
+
+export const APP_DATA_VERSION = 2;
+const LEGACY_DATA_VERSION = 1;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -33,8 +41,54 @@ export function isRecordItem(value: unknown): value is RecordItem {
   );
 }
 
+function isSession(value: unknown): value is Session {
+  if (!isObject(value)) return false;
+  return (
+    (value.name === undefined || (typeof value.name === "string" && value.name.trim().length > 0)) &&
+    Array.isArray(value.records) && value.records.every(isRecordItem)
+  );
+}
+
+function groupRecordsByDate(records: RecordItem[]): Record<string, Session[]> {
+  const sessionsByDate: Record<string, Session[]> = {};
+  for (const record of records) {
+    const date = kstDate(record.timestamp);
+    const dateSessions = sessionsByDate[date] ?? (sessionsByDate[date] = [{ records: [] }]);
+    dateSessions[0].records.push(record);
+  }
+  return sessionsByDate;
+}
+
+export function createInitialAppData(records: RecordItem[] = []): AppData {
+  return {
+    version: APP_DATA_VERSION,
+    sessionsByDate: groupRecordsByDate(records),
+  };
+}
+
 export function parseAppData(value: unknown): AppData | null {
-  if (!isObject(value) || value.version !== APP_DATA_VERSION || !Array.isArray(value.records)) return null;
-  if (!value.records.every(isRecordItem)) return null;
-  return { version: APP_DATA_VERSION, records: value.records };
+  if (!isObject(value)) return null;
+
+  if (value.version === APP_DATA_VERSION) {
+    if (!isObject(value.sessionsByDate)) return null;
+    const dateSessions = Object.values(value.sessionsByDate);
+    if (!dateSessions.every((sessions) => Array.isArray(sessions) && sessions.every(isSession))) return null;
+    const sessionsByDate = value.sessionsByDate as Record<string, Session[]>;
+    return {
+      version: APP_DATA_VERSION,
+      sessionsByDate: Object.fromEntries(
+        Object.entries(sessionsByDate).map(([date, sessions]) => [
+          date,
+          sessions.length > 0 ? sessions : [{ records: [] }],
+        ]),
+      ),
+    };
+  }
+
+  // Migrate existing single-list storage into the first session on the next save.
+  if (value.version === LEGACY_DATA_VERSION && Array.isArray(value.records) && value.records.every(isRecordItem)) {
+    return createInitialAppData(value.records);
+  }
+
+  return null;
 }

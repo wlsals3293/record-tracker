@@ -1,6 +1,7 @@
-import { APP_DATA_VERSION, parseAppData, type RecordItem } from "../models/record";
+import { isRecordItem, type RecordItem } from "../models/record";
 
 const PREFIX = "RT1:";
+const TRANSFER_DATA_VERSION = 1;
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -34,7 +35,8 @@ async function transform(value: Uint8Array, mode: "compress" | "decompress"): Pr
 }
 
 export async function exportRecords(records: RecordItem[]): Promise<string> {
-  const bytes = new TextEncoder().encode(JSON.stringify({ version: APP_DATA_VERSION, records }));
+  // Keep the established RT1 format so existing exported strings remain portable.
+  const bytes = new TextEncoder().encode(JSON.stringify({ version: TRANSFER_DATA_VERSION, records }));
   return `${PREFIX}${bytesToBase64Url(await transform(bytes, "compress"))}`;
 }
 
@@ -43,9 +45,16 @@ export async function importRecords(value: string): Promise<RecordItem[]> {
   if (!trimmed.startsWith(PREFIX)) throw new Error("지원하지 않는 형식입니다. RT1: 문자열을 사용하세요.");
   try {
     const decoded: unknown = JSON.parse(new TextDecoder().decode(await transform(base64UrlToBytes(trimmed.slice(PREFIX.length)), "decompress")));
-    const data = parseAppData(decoded);
-    if (data === null) throw new Error("데이터 구조 또는 버전이 올바르지 않습니다.");
-    return data.records;
+    if (
+      typeof decoded !== "object" || decoded === null || Array.isArray(decoded) ||
+      !Object.hasOwn(decoded, "version") || !Object.hasOwn(decoded, "records") ||
+      (decoded as { version: unknown }).version !== TRANSFER_DATA_VERSION ||
+      !Array.isArray((decoded as { records: unknown }).records) ||
+      !(decoded as { records: unknown[] }).records.every(isRecordItem)
+    ) {
+      throw new Error("데이터 구조 또는 버전이 올바르지 않습니다.");
+    }
+    return (decoded as { records: RecordItem[] }).records;
   } catch (error) {
     if (error instanceof Error && error.message !== "The string to be decoded is not correctly encoded.") throw error;
     throw new Error("손상되었거나 읽을 수 없는 가져오기 문자열입니다.");

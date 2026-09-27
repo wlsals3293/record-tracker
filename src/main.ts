@@ -1,10 +1,10 @@
 import "@picocss/pico/css/pico.min.css";
 import "./styles/main.css";
-import { APP_DATA_VERSION, type RecordItem, type RecordResult } from "./models/record";
+import { type RecordItem, type RecordResult, type Session } from "./models/record";
 import { createKstTimestamp, kstDate, kstTime, kstTimeParts, todayKst } from "./services/date";
 import { calculateStatistics, displayNumber } from "./services/statistics";
 import { exportRecords, importRecords } from "./services/transfer";
-import { loadData, saveData } from "./storage/local-storage";
+import { loadData, removeData, saveData } from "./storage/local-storage";
 
 export type ResultFilter = "all" | "success" | "fail" | "unspecified";
 
@@ -90,23 +90,70 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 
 const root = document.querySelector<HTMLElement>("#app") ?? missingRoot();
 
-let records = loadData().records;
+const appData = loadData();
 let selectedDate = todayKst();
+let activeSessionIndex = 0;
+let records = getCurrentSession().records;
 let selectedResultFilter: ResultFilter = "all";
 let isSelectionMode = false;
 const selectedRecordIds = new Set<string>();
 
 function missingRoot(): never { throw new Error("Application root is missing."); }
 
+function getSessionsForDate(date = selectedDate): Session[] {
+  const savedSessions = appData.sessionsByDate[date];
+  if (savedSessions !== undefined) return savedSessions;
+
+  const sessions = [{ records: [] }];
+  appData.sessionsByDate[date] = sessions;
+  return sessions;
+}
+
+function getCurrentSession(): Session {
+  return getSessionsForDate()[activeSessionIndex];
+}
+
+function resetSessionForSelectedDate(): void {
+  activeSessionIndex = 0;
+  records = getCurrentSession().records;
+  selectedRecordIds.clear();
+  isSelectionMode = false;
+}
+
 root.innerHTML = `
   <header class="app-header">
-    <div style="display:flex;align-items:center;gap:.5rem">
+    <div class="app-title">
       <h1>기록 관리</h1>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="테마 전환"></button>
+    </div>
+    <div class="header-actions" aria-label="표시 및 데이터 관리">
+      <button type="button" class="header-icon-button" id="theme-toggle" aria-label="테마 전환"></button>
+      <details class="header-menu">
+        <summary class="header-icon-button" aria-label="더보기 메뉴" title="더보기 메뉴">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </summary>
+        <div class="header-menu-panel" role="menu" aria-label="데이터 관리 메뉴">
+          <button type="button" data-action="clear-all" role="menuitem">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg>
+            모든 데이터 삭제
+          </button>
+        </div>
+      </details>
     </div>
     <div class="date-controls">
       <button class="secondary outline today-button" type="button" data-action="today">오늘</button>
       <input id="date-filter" type="date" aria-label="표시할 날짜" />
+      <div class="session-controls" aria-label="세션 관리">
+        <button class="secondary outline session-icon-button" id="previous-session" type="button" data-action="previous-session" aria-label="이전 세션" title="이전 세션">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <button class="secondary outline session-name-button" id="session-name" type="button" data-action="open-session-dialog" aria-label="세션 관리"></button>
+        <button class="secondary outline session-icon-button" id="next-session" type="button" data-action="next-session" aria-label="다음 세션" title="다음 세션">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <button class="secondary outline session-icon-button" type="button" data-action="add-session" aria-label="세션 추가" title="세션 추가">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
     </div>
   </header>
   <section class="filter-section" aria-label="결과 상태 필터">
@@ -233,6 +280,30 @@ root.innerHTML = `
       </form>
     </article>
   </dialog>
+  <dialog id="session-dialog" aria-labelledby="session-dialog-title">
+    <article class="session-modal">
+      <header>
+        <h3 id="session-dialog-title">세션 관리</h3>
+        <button type="button" class="close-button" data-action="close-dialog" aria-label="닫기">✕</button>
+      </header>
+      <section class="session-dialog-section" aria-labelledby="session-rename-title">
+        <h4 id="session-rename-title">이름 변경</h4>
+        <form id="session-name-form" novalidate>
+          <label for="session-name-input">세션 이름</label>
+          <div class="session-name-form-controls">
+            <input id="session-name-input" type="text" maxlength="50" required autocomplete="off" />
+            <button type="submit">저장</button>
+          </div>
+          <div id="session-dialog-feedback" class="dialog-feedback" role="status" aria-live="polite"></div>
+        </form>
+      </section>
+      <section class="session-dialog-section" aria-labelledby="session-delete-title">
+        <h4 id="session-delete-title">세션 삭제</h4>
+        <p id="session-delete-description">이 세션의 모든 기록이 삭제되며 되돌릴 수 없습니다.</p>
+        <button id="delete-session" type="button" class="danger-action" data-action="delete-session">세션 삭제</button>
+      </section>
+    </article>
+  </dialog>
   <div class="record-dock"><button id="add-record" type="button">기록</button></div>
 `;
 
@@ -276,6 +347,16 @@ const memoForm = required<HTMLFormElement>("#memo-form");
 const memoText = required<HTMLTextAreaElement>("#memo-text");
 const memoClearBtn = required<HTMLButtonElement>("#memo-clear-btn");
 
+const previousSessionButton = required<HTMLButtonElement>("#previous-session");
+const nextSessionButton = required<HTMLButtonElement>("#next-session");
+const sessionNameButton = required<HTMLButtonElement>("#session-name");
+const sessionDialog = required<HTMLDialogElement>("#session-dialog");
+const sessionNameForm = required<HTMLFormElement>("#session-name-form");
+const sessionNameInput = required<HTMLInputElement>("#session-name-input");
+const sessionDialogFeedback = required<HTMLElement>("#session-dialog-feedback");
+const sessionDeleteButton = required<HTMLButtonElement>("#delete-session");
+const sessionDeleteDescription = required<HTMLElement>("#session-delete-description");
+
 let copyTimeoutId: number | null = null;
 let editingRecordId: string | null = null;
 let editingMemoRecordId: string | null = null;
@@ -288,21 +369,45 @@ function required<T extends Element>(selector: string): T {
 
 let saveTimeoutId: number | null = null;
 function persist(immediate = true): void {
+  getCurrentSession().records = records;
   if (immediate) {
     if (saveTimeoutId !== null) {
       window.clearTimeout(saveTimeoutId);
       saveTimeoutId = null;
     }
-    const success = saveData({ version: APP_DATA_VERSION, records });
+    const success = saveData(appData);
     if (!success) setStatus("저장 공간이 부족하여 저장에 실패했습니다.", true);
   } else {
     if (saveTimeoutId !== null) window.clearTimeout(saveTimeoutId);
     saveTimeoutId = window.setTimeout(() => {
       saveTimeoutId = null;
-      const success = saveData({ version: APP_DATA_VERSION, records });
+      const success = saveData(appData);
       if (!success) setStatus("저장 공간이 부족하여 저장에 실패했습니다.", true);
     }, 300);
   }
+}
+
+function cancelScheduledSave(): void {
+  if (saveTimeoutId !== null) {
+    window.clearTimeout(saveTimeoutId);
+    saveTimeoutId = null;
+  }
+}
+
+function clearAllData(): void {
+  cancelScheduledSave();
+  if (!removeData()) {
+    setStatus("저장소에서 데이터를 삭제하지 못했습니다.", true);
+    return;
+  }
+
+  appData.sessionsByDate = {};
+  activeSessionIndex = 0;
+  records = getCurrentSession().records;
+  selectedRecordIds.clear();
+  isSelectionMode = false;
+  setStatus("모든 세션과 기록을 삭제했습니다. 테마 설정은 유지됩니다.");
+  render();
 }
 
 function getDayRecords(): RecordItem[] {
@@ -441,7 +546,6 @@ function updateListHeaderAndActions(): void {
       <button type="button" class="secondary outline" data-action="enter-select">선택</button>
       <button type="button" class="secondary outline" data-action="open-export">내보내기</button>
       <button type="button" class="secondary outline" data-action="open-import">가져오기</button>
-      <button type="button" class="danger-action" data-action="clear-all">전체 삭제</button>
     `;
     return;
   }
@@ -560,6 +664,7 @@ function updateRowResultUI(row: HTMLElement, result: RecordResult): void {
 }
 
 function render(): void {
+  updateSessionControls();
   filter.value = selectedDate;
   const dayRecords = getDayRecords();
   const dayCount = dayRecords.length;
@@ -590,10 +695,103 @@ function createId(): string {
   return `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`;
 }
 
+function defaultSessionName(index: number): string {
+  return `세션 ${index + 1}`;
+}
+
+function sessionName(session: Session, index: number): string {
+  return session.name ?? defaultSessionName(index);
+}
+
+function updateSessionControls(): void {
+  const sessions = getSessionsForDate();
+  const session = getCurrentSession();
+  const name = sessionName(session, activeSessionIndex);
+  sessionNameButton.textContent = name;
+  sessionNameButton.title = `${name} 관리`;
+  previousSessionButton.disabled = activeSessionIndex === 0;
+  nextSessionButton.disabled = activeSessionIndex === sessions.length - 1;
+}
+
+function switchSession(index: number): void {
+  const sessions = getSessionsForDate();
+  if (index < 0 || index >= sessions.length || index === activeSessionIndex) return;
+  activeSessionIndex = index;
+  records = getCurrentSession().records;
+  selectedRecordIds.clear();
+  isSelectionMode = false;
+  setStatus();
+  render();
+}
+
+function addSession(): void {
+  const session: Session = { records: [] };
+  getSessionsForDate().push(session);
+  activeSessionIndex = getSessionsForDate().length - 1;
+  records = session.records;
+  selectedRecordIds.clear();
+  isSelectionMode = false;
+  persist();
+  setStatus(`${sessionName(session, activeSessionIndex)}을 추가했습니다.`);
+  render();
+}
+
+function openSessionDialog(): void {
+  const session = getCurrentSession();
+  sessionNameInput.value = sessionName(session, activeSessionIndex);
+  sessionDialogFeedback.textContent = "";
+  sessionDialogFeedback.classList.remove("error");
+  const isOnlySession = getSessionsForDate().length === 1;
+  sessionDeleteButton.disabled = isOnlySession;
+  sessionDeleteDescription.textContent = isOnlySession
+    ? "날짜별로 최소 한 개의 세션이 필요하므로 마지막 세션은 삭제할 수 없습니다."
+    : "이 세션의 모든 기록이 삭제되며 되돌릴 수 없습니다.";
+  sessionDialog.showModal();
+}
+
+function saveSessionName(): void {
+  const name = sessionNameInput.value.trim();
+  if (name === "") {
+    sessionDialogFeedback.textContent = "세션 이름을 입력해 주세요.";
+    sessionDialogFeedback.classList.add("error");
+    sessionNameInput.focus();
+    return;
+  }
+  const session = getCurrentSession();
+  if (name === defaultSessionName(activeSessionIndex)) {
+    delete session.name;
+  } else {
+    session.name = name;
+  }
+  persist();
+  updateSessionControls();
+  sessionDialogFeedback.textContent = "이름을 저장했습니다.";
+  sessionDialogFeedback.classList.remove("error");
+  setStatus("세션 이름을 변경했습니다.");
+}
+
+function deleteCurrentSession(): void {
+  const sessions = getSessionsForDate();
+  if (sessions.length === 1) return;
+  const session = getCurrentSession();
+  if (!window.confirm(`“${sessionName(session, activeSessionIndex)}” 세션과 모든 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
+
+  sessions.splice(activeSessionIndex, 1);
+  activeSessionIndex = Math.min(activeSessionIndex, sessions.length - 1);
+  records = getCurrentSession().records;
+  selectedRecordIds.clear();
+  isSelectionMode = false;
+  persist();
+  sessionDialog.close();
+  setStatus("세션을 삭제했습니다.");
+  render();
+}
+
 function addRecord(): void {
+  const time = kstTimeParts(Date.now());
   const newRecord: RecordItem = {
     id: createId(),
-    timestamp: Date.now(),
+    timestamp: createKstTimestamp(selectedDate, Number(time.hour), Number(time.minute), Number(time.second)),
     result: null,
     dataMb: null,
     lengthSeconds: null,
@@ -890,6 +1088,24 @@ memoText.addEventListener("keydown", (event) => {
   }
 });
 
+sessionNameForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveSessionName();
+});
+
+sessionDialog.addEventListener("click", (event) => {
+  if (event.target === sessionDialog) {
+    sessionDialog.close();
+  }
+});
+
+const headerMenu = required<HTMLDetailsElement>(".header-menu");
+document.addEventListener("pointerdown", (event) => {
+  if (headerMenu.open && event.target instanceof Node && !headerMenu.contains(event.target)) {
+    headerMenu.open = false;
+  }
+});
+
 root.addEventListener("click", (event) => {
   const target = event.target as Element;
 
@@ -904,6 +1120,7 @@ root.addEventListener("click", (event) => {
     if (action === "import") { void handleImport(); return; }
     if (action === "clear-memo") { clearMemo(); return; }
     if (action === "save-memo") { saveMemo(); return; }
+    if (action === "delete-session") { deleteCurrentSession(); return; }
     return;
   }
 
@@ -923,6 +1140,10 @@ root.addEventListener("click", (event) => {
       return;
     }
     if (button.id === "add-record") { addRecord(); return; }
+    if (action === "previous-session") { switchSession(activeSessionIndex - 1); return; }
+    if (action === "next-session") { switchSession(activeSessionIndex + 1); return; }
+    if (action === "add-session") { addSession(); return; }
+    if (action === "open-session-dialog") { openSessionDialog(); return; }
     if (action === "today") {
       if (selectedDate !== todayKst()) {
         if (selectedRecordIds.size > 0) {
@@ -931,6 +1152,7 @@ root.addEventListener("click", (event) => {
           selectedRecordIds.clear();
         }
         selectedDate = todayKst();
+        resetSessionForSelectedDate();
         setStatus();
         render();
       }
@@ -1030,14 +1252,10 @@ root.addEventListener("click", (event) => {
       return;
     }
     if (action === "clear-all") {
-      if (window.confirm("모든 날짜의 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.")) {
-        records = [];
-        selectedRecordIds.clear();
-        isSelectionMode = false;
-        persist();
-        setStatus("전체 기록을 삭제했습니다.");
-        render();
+      if (window.confirm("모든 세션과 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다. 테마 설정은 유지됩니다.")) {
+        clearAllData();
       }
+      button.closest("details")?.removeAttribute("open");
       return;
     }
     if (action === "open-export") { void openExportDialog(); return; }
@@ -1113,6 +1331,7 @@ filter.addEventListener("change", () => {
       selectedRecordIds.clear();
     }
     selectedDate = filter.value;
+    resetSessionForSelectedDate();
     setStatus();
     render();
   }
