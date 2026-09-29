@@ -1,4 +1,4 @@
-import { createInitialAppData, parseAppData, type AppData } from "../models/record";
+import { createInitialAppData, parseAppData, serializeAppData, type AppData } from "../models/record";
 
 export const STORAGE_KEY = "record-tracker-data";
 
@@ -15,7 +15,7 @@ export function loadData(): AppData {
 
 export function saveData(data: AppData): boolean {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, serializeAppData(data));
     return true;
   } catch (error) {
     console.error("Failed to save data to localStorage:", error);

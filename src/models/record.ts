@@ -21,6 +21,30 @@ export interface AppData {
   sessionsByDate: Record<string, Session[]>;
 }
 
+export function defaultSessionName(index: number): string {
+  return `세션 ${index + 1}`;
+}
+
+function withoutDefaultSessionName(session: Session, index: number): Session {
+  if (session.name === undefined || session.name !== defaultSessionName(index)) return session;
+  const result = { ...session };
+  delete result.name;
+  return result;
+}
+
+// Shared by local storage and future full-data backups.
+export function serializeAppData(data: AppData): string {
+  return JSON.stringify({
+    ...data,
+    sessionsByDate: Object.fromEntries(
+      Object.entries(data.sessionsByDate).map(([date, sessions]) => [
+        date,
+        sessions.map(withoutDefaultSessionName),
+      ]),
+    ),
+  });
+}
+
 export const APP_DATA_VERSION = 2;
 const LEGACY_DATA_VERSION = 1;
 
@@ -79,7 +103,7 @@ export function parseAppData(value: unknown): AppData | null {
       sessionsByDate: Object.fromEntries(
         Object.entries(sessionsByDate).map(([date, sessions]) => [
           date,
-          sessions.length > 0 ? sessions : [{ records: [] }],
+          sessions.length > 0 ? sessions.map(withoutDefaultSessionName) : [{ records: [] }],
         ]),
       ),
     };

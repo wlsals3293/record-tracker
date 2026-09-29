@@ -1,6 +1,6 @@
 import "@picocss/pico/css/pico.min.css";
 import "./styles/main.css";
-import { type RecordItem, type RecordResult, type Session } from "./models/record";
+import { defaultSessionName, type RecordItem, type RecordResult, type Session } from "./models/record";
 import { createKstTimestamp, kstDate, kstTime, kstTimeParts, todayKst } from "./services/date";
 import { calculateStatistics, displayNumber } from "./services/statistics";
 import { exportRecords, importRecords } from "./services/transfer";
@@ -695,12 +695,14 @@ function createId(): string {
   return `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`;
 }
 
-function defaultSessionName(index: number): string {
-  return `세션 ${index + 1}`;
-}
-
 function sessionName(session: Session, index: number): string {
   return session.name ?? defaultSessionName(index);
+}
+
+function sessionNameExists(name: string, excludedIndex = -1): boolean {
+  return getSessionsForDate().some((session, index) =>
+    index !== excludedIndex && sessionName(session, index).trim() === name,
+  );
 }
 
 function updateSessionControls(): void {
@@ -725,9 +727,13 @@ function switchSession(index: number): void {
 }
 
 function addSession(): void {
+  const sessions = getSessionsForDate();
+  let nameIndex = sessions.length;
+  while (sessionNameExists(defaultSessionName(nameIndex))) nameIndex++;
   const session: Session = { records: [] };
-  getSessionsForDate().push(session);
-  activeSessionIndex = getSessionsForDate().length - 1;
+  if (nameIndex !== sessions.length) session.name = defaultSessionName(nameIndex);
+  sessions.push(session);
+  activeSessionIndex = sessions.length - 1;
   records = session.records;
   selectedRecordIds.clear();
   isSelectionMode = false;
@@ -753,6 +759,12 @@ function saveSessionName(): void {
   const name = sessionNameInput.value.trim();
   if (name === "") {
     sessionDialogFeedback.textContent = "세션 이름을 입력해 주세요.";
+    sessionDialogFeedback.classList.add("error");
+    sessionNameInput.focus();
+    return;
+  }
+  if (sessionNameExists(name, activeSessionIndex)) {
+    sessionDialogFeedback.textContent = "같은 날짜에 이미 사용 중인 세션 이름입니다. 다른 이름을 입력해 주세요.";
     sessionDialogFeedback.classList.add("error");
     sessionNameInput.focus();
     return;
