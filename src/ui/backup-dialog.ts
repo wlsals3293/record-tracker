@@ -24,8 +24,8 @@ const timestampLabel = (timestamp: number): string => kstDate(timestamp) + " " +
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : "파일을 읽지 못했습니다. 다시 선택해 주세요.";
 const fields = (record: RecordItem): string[] => [
   timestampLabel(record.timestamp), record.result === null ? "미지정" : record.result === "success" ? "성공" : "실패",
-  record.dataMb === null ? "미입력" : record.dataMb + " MB",
-  record.lengthSeconds === null ? "미입력" : record.lengthSeconds + " 초", record.memo || "없음",
+  record.size === null ? "미입력" : record.size + " MB",
+  record.duration === null ? "미입력" : record.duration + " 초", record.memo || "없음",
 ];
 
 export function createBackupDialog(actions: BackupActions): { open(): void; download(): void } {

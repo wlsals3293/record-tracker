@@ -6,11 +6,11 @@ import { serializeBackup } from '../src/services/backup.ts';
 import { todayKst } from '../src/services/date.ts';
 
 const data = {
-  version: 2,
+  version: 3,
   sessionsByDate: {
     '2026-10-07': [{ name: '운동', records: [{
       id: 'kept', timestamp: Date.parse('2026-10-07T12:00:00.123+09:00'),
-      result: 'success', dataMb: 10, lengthSeconds: 5, memo: '한글 😀\n메모',
+      result: 'success', size: 10, duration: 5, memo: '한글 😀\n메모',
     }] }, { records: [] }],
   },
 };
@@ -74,7 +74,7 @@ test('failed writes return false and preserve previously saved data', (t) => {
   const before = entries.get(STORAGE_KEY);
   t.mock.method(console, 'error', () => {});
   t.mock.method(localStorage, 'setItem', () => { throw new DOMException('Full', 'QuotaExceededError'); });
-  assert.equal(saveData({ version: 2, sessionsByDate: {} }), false);
+  assert.equal(saveData({ version: 3, sessionsByDate: {} }), false);
   assert.equal(entries.get(STORAGE_KEY), before);
   assert.deepEqual(loadData(), data);
 });
@@ -83,21 +83,45 @@ test('missing, malformed and unsupported saved data load as an empty data set', 
   for (const raw of [undefined, '{broken', '{"version":99}', '{"version":2,"sessionsByDate":[]}']) {
     entries.clear();
     if (raw !== undefined) entries.set(STORAGE_KEY, raw);
-    assert.deepEqual(loadData(), { version: 2, sessionsByDate: {} });
+    assert.deepEqual(loadData(), { version: 3, sessionsByDate: {} });
   }
 });
 
 test('unavailable storage is handled on load', (t) => {
   t.mock.method(localStorage, 'getItem', () => { throw new DOMException('Blocked', 'SecurityError'); });
-  assert.deepEqual(loadData(), { version: 2, sessionsByDate: {} });
+  assert.deepEqual(loadData(), { version: 3, sessionsByDate: {} });
 });
 
 test('legacy stored records migrate without changing the original stored value on read', () => {
   const records = data.sessionsByDate['2026-10-07'][0].records;
   const raw = JSON.stringify({ version: 1, records });
   entries.set(STORAGE_KEY, raw);
-  assert.deepEqual(loadData(), { version: 2, sessionsByDate: { '2026-10-07': [{ records }] } });
+  assert.deepEqual(loadData(), { version: 3, sessionsByDate: { '2026-10-07': [{ records }] } });
   assert.equal(entries.get(STORAGE_KEY), raw);
+});
+
+test('v2 metrics load without rewriting storage, then save with compact v3 keys', () => {
+  const records = [
+    { id: 'empty', timestamp: Date.parse('2026-10-07T12:00:00+09:00'), result: null, dataMb: null, lengthSeconds: null },
+    { id: 'zero', timestamp: Date.parse('2026-10-07T12:00:01+09:00'), result: 'success', dataMb: 0, lengthSeconds: 0 },
+  ];
+  const raw = JSON.stringify({ version: 2, sessionsByDate: { '2026-10-07': [{ records }] } });
+  entries.set(STORAGE_KEY, raw);
+  const loaded = loadData();
+  assert.equal(loaded.version, 3);
+  assert.deepEqual(loaded.sessionsByDate['2026-10-07'][0].records, [
+    { id: 'empty', timestamp: records[0].timestamp, result: null, size: null, duration: null },
+    { id: 'zero', timestamp: records[1].timestamp, result: 'success', size: 0, duration: 0 },
+  ]);
+  assert.equal(entries.get(STORAGE_KEY), raw);
+  assert.equal(saveData(loaded), true);
+  assert.deepEqual(JSON.parse(entries.get(STORAGE_KEY)), {
+    version: 3, sessionsByDate: { '2026-10-07': [{ records: [
+      { id: 'empty', timestamp: records[0].timestamp, result: null },
+      { id: 'zero', timestamp: records[1].timestamp, result: 'success', size: 0, duration: 0 },
+    ] }] },
+  });
+  assert.deepEqual(loadData(), loaded);
 });
 
 test('removal preserves theme and reports storage failures without discarding data', (t) => {

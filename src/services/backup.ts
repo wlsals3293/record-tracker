@@ -1,4 +1,4 @@
-import { APP_DATA_VERSION, isRecordItem, parseAppData, resolveSessionNames, serializeAppData, type AppData, type RecordItem, type Session } from "../models/record";
+import { APP_DATA_VERSION, parseRecordItem, parseAppData, resolveSessionNames, serializeAppData, type AppData, type RecordItem, type Session } from "../models/record";
 import { kstDate, kstTime } from "./date";
 
 export type RestoreMode = "replace" | "merge";
@@ -15,13 +15,12 @@ export function isCalendarDate(value: string): boolean {
 }
 
 function checkedRecord(value: unknown, location: string): RecordItem {
-  if (!isRecordItem(value)) throw new Error(location + ": 기록의 ID·시각·결과·숫자·메모 형식이 올바르지 않습니다.");
-  if (!Number.isFinite(new Date(value.timestamp).getTime()) || !isCalendarDate(kstDate(value.timestamp))) {
+  const record = parseRecordItem(value);
+  if (record === null) throw new Error(location + ": 기록의 ID·시각·결과·숫자·메모 형식이 올바르지 않습니다.");
+  if (!Number.isFinite(new Date(record.timestamp).getTime()) || !isCalendarDate(kstDate(record.timestamp))) {
     throw new Error(location + ": 표시할 수 없는 기록 시각입니다.");
   }
-  // Foreign settings and unknown object keys never enter app state.
-  return { id: value.id, timestamp: value.timestamp, result: value.result, dataMb: value.dataMb,
-    lengthSeconds: value.lengthSeconds, ...(value.memo === undefined ? {} : { memo: value.memo }) };
+  return record;
 }
 
 export function serializeBackup(data: AppData, now = Date.now()): string {
@@ -45,7 +44,7 @@ export function parseBackup(text: string): BackupFile {
   let value: unknown;
   try { value = JSON.parse(text.replace(/^\uFEFF/, "")) as unknown; }
   catch { throw new Error("JSON 파일을 읽을 수 없습니다. 손상되지 않은 전체 백업 파일을 선택해 주세요."); }
-  if (!isObject(value) || value.format !== "record-tracker-backup") throw new Error("이 앱의 전체 백업 파일이 아닙니다. RT1 문자열은 기록 가져오기를 이용해 주세요.");
+  if (!isObject(value) || value.format !== "record-tracker-backup") throw new Error("이 앱의 전체 백업 파일이 아닙니다. 공유 문자열은 기록 가져오기를 이용해 주세요.");
   if (value.backupVersion !== 1) throw new Error("지원하지 않는 백업 규격 버전입니다.");
   if (typeof value.createdAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value.createdAt)) {
     throw new Error("백업 생성 시각이 올바른 UTC ISO 형식이 아닙니다.");
@@ -55,7 +54,7 @@ export function parseBackup(text: string): BackupFile {
   if (!Number.isFinite(createdTimestamp) || new Date(createdTimestamp).toISOString() !== normalizedCreated) {
     throw new Error("백업 생성 시각이 유효하지 않습니다.");
   }
-  if (!isObject(value.data) || (value.data.version !== 1 && value.data.version !== APP_DATA_VERSION)) {
+  if (!isObject(value.data) || (value.data.version !== 1 && value.data.version !== 2 && value.data.version !== APP_DATA_VERSION)) {
     throw new Error("지원하지 않는 앱 데이터 버전입니다.");
   }
   const warnings: string[] = [];
@@ -127,7 +126,7 @@ export interface MergePlan { data: AppData; sessions: MergeSession[]; counts: Me
 
 const second = (record: RecordItem): number => Math.floor(record.timestamp / 1000);
 function contentToken(record: RecordItem): string {
-  return JSON.stringify([second(record), record.result, record.dataMb, record.lengthSeconds, record.memo ?? ""]);
+  return JSON.stringify([second(record), record.result, record.size, record.duration, record.memo ?? ""]);
 }
 export function sameRecordContent(left: RecordItem, right: RecordItem): boolean {
   return contentToken(left) === contentToken(right);

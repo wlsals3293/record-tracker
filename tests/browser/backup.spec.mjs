@@ -6,7 +6,7 @@ test('download includes the latest in-memory values after a failed save', async 
   await startApp(page, original);
   await page.clock.pauseAt(new Date(start + 60_000));
   await page.evaluate(() => { window.__failSave = true; });
-  await page.locator('.record-row input[data-field="dataMb"]').fill('7654');
+  await page.locator('.record-row input[data-field="size"]').fill('7654');
   await page.clock.runFor(350);
   expect(await storage(page)).toEqual(original);
   const downloading = page.waitForEvent('download');
@@ -16,7 +16,7 @@ test('download includes the latest in-memory values after a failed save', async 
   expect(download.suggestedFilename()).toMatch(/^record-tracker-backup-\d{4}-\d{2}-\d{2}_\d{6}\.json$/);
   const exported = JSON.parse(await fs.readFile(await download.path(), 'utf8'));
   const expected = structuredClone(original);
-  expected.sessionsByDate[date][0].records[0].dataMb = 7654;
+  expected.sessionsByDate[date][0].records[0].size = 7654;
   expect(exported.data).toEqual(expected);
   expect(Object.keys(exported)).toEqual(['format', 'backupVersion', 'createdAt', 'data']);
   expect(await page.evaluate(() => window.__themeAccess)).toEqual([]);
@@ -51,7 +51,7 @@ test('cancel and failed replacement preserve the current view and data; retry su
 
 test('replacement opens the latest date regardless of the backup key order', async ({ page }) => {
   await startApp(page);
-  const replacement = { version: 2, sessionsByDate: {
+  const replacement = { version: 3, sessionsByDate: {
     '2026-10-09': [{ name: '최신', records: [item(0, { timestamp: Date.parse('2026-10-09T12:00:00+09:00') })] }],
     '2026-10-06': [{ name: '이전', records: [] }],
     [date]: [{ records: [] }],
@@ -64,7 +64,7 @@ test('replacement opens the latest date regardless of the backup key order', asy
 
 test('a backup with no dates clears saved records and opens an empty session today', async ({ page }) => {
   await startApp(page);
-  const empty = { version: 2, sessionsByDate: {} };
+  const empty = { version: 3, sessionsByDate: {} };
   await openRestore(page, empty); await mode(page, 'replace'); await apply(page);
   expect(await storage(page)).toEqual(empty);
   await expect(page.locator('#date-filter')).toHaveValue(date);
@@ -88,17 +88,17 @@ for (const restoreMode of ['replace', 'merge']) {
 test('failed restore retains a pending save; successful restore cancels it', async ({ page }) => {
   await startApp(page);
   await page.clock.pauseAt(new Date(start + 60_000));
-  await page.locator('.record-row input[data-field="dataMb"]').fill('10');
-  const replacement = appData([item(0, { dataMb: 99 })]);
+  await page.locator('.record-row input[data-field="size"]').fill('10');
+  const replacement = appData([item(0, { size: 99 })]);
   await openRestore(page, replacement); await mode(page, 'replace');
   await page.evaluate(() => { window.__failSave = true; });
   await page.locator('[data-restore="apply"]').click();
   await expect(page.locator('.restore-feedback')).toContainText('복원하지 못했습니다');
   await page.evaluate(() => { window.__failSave = false; });
   await page.clock.runFor(350);
-  expect((await storage(page)).sessionsByDate[date][0].records[0].dataMb).toBe(10);
+  expect((await storage(page)).sessionsByDate[date][0].records[0].size).toBe(10);
   await page.locator('[data-restore="cancel"]').click();
-  await page.locator('.record-row input[data-field="dataMb"]').fill('20');
+  await page.locator('.record-row input[data-field="size"]').fill('20');
   await openRestore(page, replacement); await mode(page, 'replace'); await apply(page);
   const writes = await page.evaluate(() => window.__writes);
   await page.clock.runFor(1000);
@@ -183,13 +183,13 @@ test('1000 conflicts render lazily and choices persist across pages and bulk sel
 
 test('changing targets or app data invalidates previous conflict choices', async ({ page }) => {
   await startApp(page);
-  await openRestore(page, appData([item(0, { dataMb: 9 })])); await mode(page, 'merge');
+  await openRestore(page, appData([item(0, { size: 9 })])); await mode(page, 'merge');
   await page.getByRole('button', { name: '미선택 항목 모두 현재 기록 유지', exact: true }).click();
   const target = page.locator(`select[data-focus-key="${date}/0/target"]`);
   await target.selectOption('1'); await target.selectOption('0');
   await expect(page.locator('[data-restore="apply"]')).toBeDisabled();
   await page.getByRole('button', { name: '미선택 항목 모두 현재 기록 유지', exact: true }).click();
-  await page.locator('.record-row input[data-field="dataMb"]').evaluate((input) => {
+  await page.locator('.record-row input[data-field="size"]').evaluate((input) => {
     input.value = '5'; input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await page.locator('[data-restore="apply"]').click();
@@ -197,7 +197,7 @@ test('changing targets or app data invalidates previous conflict choices', async
   await expect(page.locator('[data-restore="apply"]')).toBeDisabled();
   await page.getByRole('button', { name: '미선택 항목 모두 백업 기록 적용', exact: true }).click();
   await apply(page);
-  expect((await storage(page)).sessionsByDate[date][0].records[0].dataMb).toBe(9);
+  expect((await storage(page)).sessionsByDate[date][0].records[0].size).toBe(9);
 });
 
 test('late file reads cannot replace a newer candidate or reopen a cancelled dialog', async ({ page }) => {

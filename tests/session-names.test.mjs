@@ -4,7 +4,7 @@ import { resolveSessionNames, serializeAppData, parseAppData } from '../src/mode
 
 const unnamed = () => ({ records: [] });
 const named = (name) => ({ name, records: [] });
-const asData = (sessions) => ({ version: 2, sessionsByDate: { '2026-10-07': sessions } });
+const asData = (sessions) => ({ version: 3, sessionsByDate: { '2026-10-07': sessions } });
 
 test('automatic names avoid explicit names before and after their positions', () => {
   assert.deepEqual(resolveSessionNames([named('세션 2'), unnamed(), unnamed()]), ['세션 2', '세션 3', '세션 4']);
@@ -28,8 +28,8 @@ test('ten sessions with one thousand records each retain every record after nami
       id: `${sessionIndex}-${index}`,
       timestamp: Date.parse('2026-10-07T09:00:00+09:00') + index * 1000,
       result: index % 2 === 0 ? 'success' : null,
-      dataMb: index,
-      lengthSeconds: index * 2,
+      size: index,
+      duration: index * 2,
       memo: `세션 ${sessionIndex} 기록 ${index}`,
     })),
   }));
@@ -54,7 +54,7 @@ test('deleting a middle session recalculates automatic names without duplicates'
 });
 
 test('generated collision names stay omitted and stable across storage round trips', () => {
-  const record = Object.freeze({ id: 'kept', timestamp: 1791349200000, result: null, dataMb: 10, lengthSeconds: 5, memo: '보존' });
+  const record = Object.freeze({ id: 'kept', timestamp: 1791349200000, result: null, size: 10, duration: 5, memo: '보존' });
   const sessions = Object.freeze([
     Object.freeze(named('세션 2')),
     Object.freeze({ records: Object.freeze([record]) }),

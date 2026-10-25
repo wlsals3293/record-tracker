@@ -1,7 +1,8 @@
-import { isRecordItem, type RecordItem } from "../models/record";
+import { parseRecords, serializeRecord, type RecordItem } from "../models/record";
 
-const PREFIX = "RT1:";
-const TRANSFER_DATA_VERSION = 1;
+const PREFIX = "RT2:";
+const LEGACY_PREFIX = "RT1:";
+const TRANSFER_DATA_VERSION = 2;
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -35,26 +36,26 @@ async function transform(value: Uint8Array, mode: "compress" | "decompress"): Pr
 }
 
 export async function exportRecords(records: RecordItem[]): Promise<string> {
-  // Keep the established RT1 format so existing exported strings remain portable.
-  const bytes = new TextEncoder().encode(JSON.stringify({ version: TRANSFER_DATA_VERSION, records }));
+  const bytes = new TextEncoder().encode(JSON.stringify({ version: TRANSFER_DATA_VERSION, records: records.map(serializeRecord) }));
   return `${PREFIX}${bytesToBase64Url(await transform(bytes, "compress"))}`;
 }
 
 export async function importRecords(value: string): Promise<RecordItem[]> {
   const trimmed = value.trim();
-  if (!trimmed.startsWith(PREFIX)) throw new Error("지원하지 않는 형식입니다. RT1: 문자열을 사용하세요.");
+  const prefix = trimmed.startsWith(PREFIX) ? PREFIX : trimmed.startsWith(LEGACY_PREFIX) ? LEGACY_PREFIX : null;
+  if (prefix === null) throw new Error("지원하지 않는 형식입니다. RT1: 또는 RT2: 문자열을 사용하세요.");
   try {
-    const decoded: unknown = JSON.parse(new TextDecoder().decode(await transform(base64UrlToBytes(trimmed.slice(PREFIX.length)), "decompress")));
+    const decoded: unknown = JSON.parse(new TextDecoder().decode(await transform(base64UrlToBytes(trimmed.slice(prefix.length)), "decompress")));
     if (
       typeof decoded !== "object" || decoded === null || Array.isArray(decoded) ||
       !Object.hasOwn(decoded, "version") || !Object.hasOwn(decoded, "records") ||
-      (decoded as { version: unknown }).version !== TRANSFER_DATA_VERSION ||
-      !Array.isArray((decoded as { records: unknown }).records) ||
-      !(decoded as { records: unknown[] }).records.every(isRecordItem)
+      (decoded as { version: unknown }).version !== (prefix === PREFIX ? TRANSFER_DATA_VERSION : 1)
     ) {
       throw new Error("데이터 구조 또는 버전이 올바르지 않습니다.");
     }
-    return (decoded as { records: RecordItem[] }).records;
+    const records = parseRecords((decoded as { records: unknown }).records);
+    if (records === null) throw new Error("데이터 구조 또는 버전이 올바르지 않습니다.");
+    return records;
   } catch (error) {
     if (error instanceof Error && error.message !== "The string to be decoded is not correctly encoded.") throw error;
     throw new Error("손상되었거나 읽을 수 없는 가져오기 문자열입니다.");

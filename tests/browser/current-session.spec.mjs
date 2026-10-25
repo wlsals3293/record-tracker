@@ -29,7 +29,7 @@ test('new sessions and replacement restore update the remembered position', asyn
   await page.getByRole('button', { name: '세션 추가', exact: true }).click();
   await page.reload();
   await expect(page.locator('#session-name')).toHaveText('세션 3');
-  const replacement = { version: 2, sessionsByDate: { '2026-10-06': [{ name: '복원한 세션', records: [] }] } };
+  const replacement = { version: 3, sessionsByDate: { '2026-10-06': [{ name: '복원한 세션', records: [] }] } };
   await openRestore(page, replacement);
   await mode(page, 'replace');
   await apply(page);

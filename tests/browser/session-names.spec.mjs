@@ -1,7 +1,7 @@
 import { test, expect, date, startApp, storage } from './helpers.mjs';
 
 test('session add, rename, delete and reload use the same automatic name rules', async ({ page }) => {
-  await startApp(page, { version: 2, sessionsByDate: { [date]: [{ name: '세션 2', records: [] }] } });
+  await startApp(page, { version: 3, sessionsByDate: { [date]: [{ name: '세션 2', records: [] }] } });
   const rename = async (name, close = true) => {
     await page.getByRole('button', { name: '세션 관리', exact: true }).click();
     await page.getByLabel('세션 이름', { exact: true }).fill(name);

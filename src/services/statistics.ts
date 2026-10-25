@@ -27,11 +27,11 @@ export function calculateStatistics(records: readonly RecordItem[]): Statistics 
     } else {
       unspecifiedCount++;
     }
-    if (record.dataMb !== null) {
-      totalMb += record.dataMb;
+    if (record.size !== null) {
+      totalMb += record.size;
     }
-    if (record.lengthSeconds !== null) {
-      totalSeconds += record.lengthSeconds;
+    if (record.duration !== null) {
+      totalSeconds += record.duration;
     }
   }
 

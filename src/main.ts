@@ -227,7 +227,7 @@ root.innerHTML = `
       </header>
       <p>현재 선택 날짜의 기록만 기존 데이터에 병합합니다. 동일한 ID는 추가하지 않습니다.</p>
       <label for="import-text">전송 문자열</label>
-      <textarea id="import-text" rows="5" spellcheck="false" placeholder="RT1:... 문자열을 붙여넣으세요"></textarea>
+      <textarea id="import-text" rows="5" spellcheck="false" placeholder="RT1: 또는 RT2: 문자열을 붙여넣으세요"></textarea>
       <div id="import-feedback" class="dialog-feedback" role="status" aria-live="polite"></div>
       <footer><button type="button" data-action="import">가져오기 병합</button></footer>
     </article>
@@ -475,8 +475,8 @@ function recordTemplate(record: RecordItem, order: number): string {
           <button type="button" class="result fail ${fail ? "selected" : ""}" data-action="result" data-result="fail" aria-pressed="${fail}">${fail ? "✓ 실패" : "실패"}</button>
         </div>
         <div class="metrics-fields">
-          <label class="inline-field data-field">데이터 <input type="number" min="0" step="any" inputmode="decimal" aria-label="Data MB" data-field="dataMb" value="${numberValue(record.dataMb)}" /> <span>MB</span></label>
-          <label class="inline-field length-field">길이 <input type="number" min="0" step="1" inputmode="numeric" aria-label="Length seconds" data-field="lengthSeconds" value="${numberValue(record.lengthSeconds)}" /> <span>초</span></label>
+          <label class="inline-field data-field">데이터 <input type="number" min="0" step="any" inputmode="decimal" aria-label="Data MB" data-field="size" value="${numberValue(record.size)}" /> <span>MB</span></label>
+          <label class="inline-field length-field">길이 <input type="number" min="0" step="1" inputmode="numeric" aria-label="Length seconds" data-field="duration" value="${numberValue(record.duration)}" /> <span>초</span></label>
         </div>
       </div>
       <div class="record-actions">
@@ -814,8 +814,8 @@ function addRecord(): void {
     id: createId(),
     timestamp: createKstTimestamp(selectedDate, Number(time.hour), Number(time.minute), Number(time.second)),
     result: null,
-    dataMb: null,
-    lengthSeconds: null,
+    size: null,
+    duration: null,
   };
   records = [newRecord, ...records];
   persist();
@@ -1320,7 +1320,7 @@ function syncNumberInput(input: HTMLInputElement, isChange = false): void {
 
   const raw = input.value.trim();
   const value = raw === "" ? null : Number(raw);
-  const field = input.dataset.field as "dataMb" | "lengthSeconds";
+  const field = input.dataset.field as "size" | "duration";
 
   if (value !== null && (!Number.isFinite(value) || value < 0)) {
     setStatus("0 이상의 숫자만 입력할 수 있습니다.", true);

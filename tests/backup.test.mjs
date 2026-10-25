@@ -5,9 +5,9 @@ import { serializeBackup, parseBackup, planMerge, suggestSessionChoices, session
 import { exportRecords, importRecords } from '../src/services/transfer.ts';
 
 const day = '2026-10-07', time = Date.parse(day + 'T12:00:00+09:00'), key = sessionKey(day, 0);
-const record = (id = 'a', offset = 0, extra = {}) => ({ id, timestamp: time + offset, result: null, dataMb: null, lengthSeconds: null, ...extra });
+const record = (id = 'a', offset = 0, extra = {}) => ({ id, timestamp: time + offset, result: null, size: null, duration: null, ...extra });
 const session = (records = [], name) => ({ ...(name === undefined ? {} : { name }), records });
-const data = (...sessions) => ({ version: 2, sessionsByDate: { [day]: sessions } });
+const data = (...sessions) => ({ version: 3, sessionsByDate: { [day]: sessions } });
 const merged = (current, incoming, choices = suggestSessionChoices(current, incoming)) => planMerge(current, incoming, choices);
 function choose(current, incoming, choices, side, rowIndex = 0, reviewIndex = 0) {
   const row = merged(current, incoming, choices).sessions[rowIndex], review = row.reviews[reviewIndex];
@@ -22,7 +22,7 @@ function match(current, incoming, choices, target, rowIndex = 0, reviewIndex = 0
 function freeze(value) { Object.freeze(value); for (const child of Object.values(value)) if (child && typeof child === 'object') freeze(child); return value; }
 
 test('a backup with no dates round-trips and merging it leaves current data unchanged', () => {
-  const empty = { version: 2, sessionsByDate: {} };
+  const empty = { version: 3, sessionsByDate: {} };
   assert.deepEqual(parseBackup(serializeBackup(empty, time)).data, empty);
   const current = data(session([record()]));
   const plan = merged(current, empty);
@@ -42,7 +42,7 @@ test('backup round trip preserves dates, order, empty sessions, Unicode and mill
   assert.equal(exported.data.sessionsByDate[day][0].name, undefined);
   assert.equal(exported.data.sessionsByDate[day][1].name, '세션 7');
   const restored = parseBackup(JSON.stringify(exported)).data;
-  assert.equal(serializeAppData(restored), serializeAppData({ version: 2, sessionsByDate: original.sessionsByDate }));
+  assert.equal(serializeAppData(restored), serializeAppData({ version: 3, sessionsByDate: original.sessionsByDate }));
   assert.equal(JSON.stringify(original), before);
   assert.equal(backupFilename(time), 'record-tracker-backup-2026-10-07_120000.json');
 });
@@ -52,11 +52,11 @@ test('validates external envelope, versions, calendar dates, timestamps and ever
   const mutations = [
     (v) => { v.format = 'something-else'; }, (v) => { v.backupVersion = 2; },
     (v) => { v.createdAt = '2026-02-30T00:00:00.000Z'; }, (v) => { v.createdAt = 'tomorrow'; },
-    (v) => { v.data.version = 3; }, (v) => { v.data.sessionsByDate = []; },
+    (v) => { v.data.version = 4; }, (v) => { v.data.sessionsByDate = []; },
     (v) => { v.data.sessionsByDate['2026-02-30'] = []; },
     (v) => { v.data.sessionsByDate['0000-01-01'] = []; },
     (v) => { v.data.sessionsByDate[day][0].records[0].timestamp = 1e100; },
-    (v) => { v.data.sessionsByDate[day][0].records.push(record('bad', 0, { dataMb: -1 })); },
+    (v) => { v.data.sessionsByDate[day][0].records.push(record('bad', 0, { size: -1 })); },
     (v) => { v.data.sessionsByDate[day][0].name = ' '; },
     (v) => { v.data.sessionsByDate[day][0].records[0].memo = 1; },
     (v) => { v.data.sessionsByDate[day][0].records[0].id = ''; },
@@ -74,7 +74,7 @@ test('validates external envelope, versions, calendar dates, timestamps and ever
   unknown.data.sessionsByDate[day][0].other = 'ignored';
   unknown.data.sessionsByDate[day][0].records[0].other = 'ignored';
   assert.deepEqual(parseBackup(JSON.stringify(unknown)).data, data(session([record()])));
-  assert.equal(parseBackup('\ufeff' + serializeBackup(data(session()), time)).data.version, 2);
+  assert.equal(parseBackup('\ufeff' + serializeBackup(data(session()), time)).data.version, 3);
 });
 
 test('v1 migration and empty day repair are explicit and duplicate names survive', () => {
@@ -115,7 +115,7 @@ test('session mapping is date scoped, ambiguous names require selection, one-to-
   assert.deepEqual(resolveSessionNames(merged(current, incoming, choices).data.sessionsByDate[day]), ['운동', '운동']);
   const duplicateSources = suggestSessionChoices(data(session([], '운동')), data(session([], '운동'), session([], '운동')));
   assert.equal(duplicateSources[key].target, null);
-  const otherDate = { version: 2, sessionsByDate: { '2026-10-08': [session([], '운동')] } };
+  const otherDate = { version: 3, sessionsByDate: { '2026-10-08': [session([], '운동')] } };
   assert.equal(Object.values(suggestSessionChoices(current, otherDate))[0].target, 'new');
 });
 
@@ -149,7 +149,7 @@ test('same second ignores IDs and milliseconds, but crossing a second creates a 
 
 test('content conflicts start unselected and choosing backup preserves current ID/position and backup milliseconds', () => {
   const current = freeze(data(session([record('a', 100), record('later', 2000)])));
-  const incoming = freeze(data(session([record('b', 900, { result: 'success', memo: '백업 내용', dataMb: 3, lengthSeconds: 5 })])));
+  const incoming = freeze(data(session([record('b', 900, { result: 'success', memo: '백업 내용', size: 3, duration: 5 })])));
   const choices = suggestSessionChoices(current, incoming);
   assert.equal(merged(current, incoming, choices).pending, 1);
   const keep = choose(current, incoming, choices, 'current');
@@ -158,7 +158,7 @@ test('content conflicts start unselected and choosing backup preserves current I
   assert.equal(applied.pending, 0); assert.equal(applied.counts.updated, 1);
   assert.deepEqual(applied.data.sessionsByDate[day][0].records[0], { ...incoming.sessionsByDate[day][0].records[0], id: 'a' });
   assert.equal(applied.data.sessionsByDate[day][0].records[1].id, 'later');
-  assert.equal(current.sessionsByDate[day][0].records[0].dataMb, null);
+  assert.equal(current.sessionsByDate[day][0].records[0].size, null);
 });
 
 test('same ID with changed time is a conflict; different ID/time is new; other sessions remain untouched', () => {
@@ -173,7 +173,7 @@ test('same ID with changed time is a conflict; different ID/time is new; other s
 
 test('ID/time disagreement and multiple same-second records require explicit correspondence without deleting any record', () => {
   const current = data(session([record('a'), record('b', 1000)]));
-  const incoming = data(session([record('a', 1000, { dataMb: 7 })]));
+  const incoming = data(session([record('a', 1000, { size: 7 })]));
   const choices = suggestSessionChoices(current, incoming);
   let plan = merged(current, incoming, choices);
   assert.equal(plan.pending, 1); assert.equal(plan.sessions[0].reviews[0].target, undefined);
@@ -194,8 +194,8 @@ test('ID/time disagreement and multiple same-second records require explicit cor
 });
 
 test('changing correspondence cannot reuse a content choice for another target', () => {
-  const current = data(session([record('a'), record('b', 500, { dataMb: 2 })]));
-  const incoming = data(session([record('c', 100, { dataMb: 3 })]));
+  const current = data(session([record('a'), record('b', 500, { size: 2 })]));
+  const incoming = data(session([record('c', 100, { size: 3 })]));
   const choices = suggestSessionChoices(current, incoming);
   match(current, incoming, choices, 0);
   choose(current, incoming, choices, 'backup');
@@ -214,11 +214,11 @@ test('repeat merge skips previously appended records and preserves original orde
 });
 
 for (const size of [500, 1000]) test('merge ' + size + ' records per session across multiple dates preserves every decision', () => {
-  const current = { version: 2, sessionsByDate: {} }, incoming = { version: 2, sessionsByDate: {} };
+  const current = { version: 3, sessionsByDate: {} }, incoming = { version: 3, sessionsByDate: {} };
   for (const date of ['2026-10-06', day, '2026-10-08']) {
     const start = Date.parse(date + 'T00:00:00+09:00');
-    current.sessionsByDate[date] = Array.from({ length: 10 }, (_, s) => session(Array.from({ length: size }, (_, i) => record(s + '-' + i, 0, { timestamp: start + i * 1000, dataMb: i, memo: '기록 😀' }))));
-    incoming.sessionsByDate[date] = current.sessionsByDate[date].map((s) => session(s.records.map((r, i) => ({ ...r, id: 'backup-' + r.id, timestamp: r.timestamp + 999, dataMb: i % 10 === 0 ? i + 1 : i }))));
+    current.sessionsByDate[date] = Array.from({ length: 10 }, (_, s) => session(Array.from({ length: size }, (_, i) => record(s + '-' + i, 0, { timestamp: start + i * 1000, size: i, memo: '기록 😀' }))));
+    incoming.sessionsByDate[date] = current.sessionsByDate[date].map((s) => session(s.records.map((r, i) => ({ ...r, id: 'backup-' + r.id, timestamp: r.timestamp + 999, size: i % 10 === 0 ? i + 1 : i }))));
   }
   const original = serializeAppData(current), choices = suggestSessionChoices(current, incoming);
   let plan = merged(current, incoming, choices);
@@ -240,16 +240,16 @@ for (const size of [500, 1000]) test('merge ' + size + ' records per session acr
   assert.equal(merged(plan.data, incoming).changed, false);
 });
 
-test('RT1 sharing still round-trips record payloads independently from backup format', async () => {
-  const records = [record('x', 123, { memo: '공유 😀\n메모', dataMb: 10, result: 'success' })];
+test('RT2 sharing round-trips record payloads independently from backup format', async () => {
+  const records = [record('x', 123, { memo: '공유 😀\n메모', size: 10, result: 'success' })];
   const text = await exportRecords(records);
-  assert.ok(text.startsWith('RT1:')); assert.deepEqual(await importRecords(text), records);
+  assert.ok(text.startsWith('RT2:')); assert.deepEqual(await importRecords(text), records);
   assert.throws(() => parseBackup(text));
 });
 
 test('subsequent backup records use the selected new time without creating another duplicate', () => {
   const current = data(session([record('a')]));
-  const incoming = data(session([record('a', 1000, { dataMb: 1 }), record('b', 1500, { dataMb: 1 })]));
+  const incoming = data(session([record('a', 1000, { size: 1 }), record('b', 1500, { size: 1 })]));
   const choices = suggestSessionChoices(current, incoming);
   const plan = choose(current, incoming, choices, 'backup');
   assert.equal(plan.pending, 0);
@@ -260,7 +260,7 @@ test('subsequent backup records use the selected new time without creating anoth
 
 test('repeated backup IDs retain correspondence after an ID-different time match', () => {
   const current = data(session([record('a')]));
-  const incoming = data(session([record('b'), record('b', 1000, { dataMb: 9 })]));
+  const incoming = data(session([record('b'), record('b', 1000, { size: 9 })]));
   const choices = suggestSessionChoices(current, incoming);
   let plan = merged(current, incoming, choices);
   assert.equal(plan.counts.addedRecords, 0);
@@ -268,12 +268,12 @@ test('repeated backup IDs retain correspondence after an ID-different time match
   plan = choose(current, incoming, choices, 'backup');
   assert.equal(plan.pending, 0);
   assert.equal(plan.data.sessionsByDate[day][0].records.length, 1);
-  assert.deepEqual(plan.data.sessionsByDate[day][0].records[0], record('a', 1000, { dataMb: 9 }));
+  assert.deepEqual(plan.data.sessionsByDate[day][0].records[0], record('a', 1000, { size: 9 }));
 });
 
 test('sequential conflict choices preserve final raw timestamp and count the stored update', () => {
   const current = data(session([record('a')]));
-  const incoming = data(session([record('a', 900, { dataMb: 9 }), record('a', 500)]));
+  const incoming = data(session([record('a', 900, { size: 9 }), record('a', 500)]));
   const choices = suggestSessionChoices(current, incoming);
   choose(current, incoming, choices, 'backup', 0, 0);
   const plan = choose(current, incoming, choices, 'backup', 0, 1);

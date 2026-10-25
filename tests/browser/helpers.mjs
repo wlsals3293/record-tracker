@@ -13,10 +13,10 @@ export const date = '2026-10-07';
 export const start = Date.parse(date + 'T12:00:00+09:00');
 export const item = (index, extra = {}) => ({
   id: 'current-' + index, timestamp: start + index * 1000,
-  result: null, dataMb: index, lengthSeconds: null, ...extra,
+  result: null, size: index, ...extra,
 });
 export const appData = (records = [], name = '운동') => ({
-  version: 2, sessionsByDate: { [date]: [{ name, records }, { name: '별도', records: [] }] },
+  version: 3, sessionsByDate: { [date]: [{ name, records }, { name: '별도', records: [] }] },
 });
 export const payload = (data, name = 'test-backup.json') => ({
   name, mimeType: 'application/json',
