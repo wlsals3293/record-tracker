@@ -694,9 +694,17 @@ function render(): void {
     : visible.map((record) => recordTemplate(record, orderMap.get(record.id) ?? 1)).join("");
 }
 
+const RECORD_ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
 function createId(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  return `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`;
+  const sessions = getSessionsForDate();
+  const bytes = new Uint8Array(12);
+  let id: string;
+  do {
+    // With exactly 64 symbols, the lowest 6 random bits select each symbol equally.
+    id = Array.from(crypto.getRandomValues(bytes), (byte) => RECORD_ID_ALPHABET[byte & 63]).join("");
+  } while (sessions.some((session) => session.records.some((record) => record.id === id)));
+  return id;
 }
 
 function sessionName(index = activeSessionIndex): string {
