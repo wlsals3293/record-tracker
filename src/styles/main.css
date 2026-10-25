@@ -431,7 +431,7 @@ h3 {
   border: 0;
   border-radius: .35rem;
   background: transparent;
-  color: var(--rt-delete-hover-color);
+  color: var(--rt-text);
   font-size: .85rem;
   line-height: 1.4;
   text-align: left;
@@ -441,16 +441,16 @@ h3 {
 
 .header-menu-panel button:hover,
 .header-menu-panel button:focus-visible {
-  background: var(--rt-delete-hover-bg);
+  background: var(--rt-filter-hover-bg);
 }
 
 .header-menu-panel button:focus-visible {
-  outline: 2px solid var(--rt-delete-focus);
+  outline: 2px solid var(--pico-primary);
   outline-offset: -2px;
 }
 
 .header-menu-panel button:active {
-  background: var(--rt-delete-active-bg);
+  background: var(--rt-filter-hover-bg);
 }
 
 .header-menu-panel button svg {
@@ -1847,4 +1847,54 @@ dialog article footer button,
     height: 2.85rem;
     font-size: 1.2rem;
   }
+}
+
+/* Full-data backup and restore */
+.header-menu-panel button[data-action="clear-all"] { color: var(--rt-delete-hover-color); }
+.header-menu-panel button[data-action="clear-all"]:hover,
+.header-menu-panel button[data-action="clear-all"]:focus-visible { background: var(--rt-delete-hover-bg); }
+.header-menu-panel button[data-action="clear-all"]:focus-visible { outline-color: var(--rt-delete-focus); }
+.header-menu-panel button[data-action="clear-all"]:active { background: var(--rt-delete-active-bg); }
+#restore-dialog { padding: 1rem; }
+#restore-dialog > article { max-width: 56rem; width: 100%; max-height: calc(100dvh - 2rem); }
+#restore-dialog [hidden] { display: none; }
+#restore-dialog h4 { font-size: 1rem; margin: 0 0 .75rem; overflow-wrap: anywhere; }
+#restore-dialog input[type="file"] { width: 100%; font-size: .85rem; }
+#restore-dialog select, #restore-dialog input[type="text"] { margin: .35rem 0 .5rem; font-size: .875rem; }
+#restore-dialog label { margin-bottom: .5rem; }
+#restore-dialog .restore-modes { display: flex; gap: 1.5rem; padding: .75rem 0; border-bottom: 1px solid var(--rt-border); }
+#restore-dialog .restore-modes legend { font-size: .9rem; font-weight: 600; }
+#restore-dialog .restore-modes label { margin: 0; }
+#restore-dialog .restore-feedback { margin: .5rem 0; overflow-wrap: anywhere; }
+#restore-dialog .restore-error, #restore-dialog .restore-feedback.error { color: var(--rt-feedback-error); }
+#restore-dialog .restore-ready { color: var(--rt-feedback-success); font-weight: 600; }
+#restore-dialog .restore-warning { border-left: 3px solid var(--pico-primary); padding: .5rem .75rem; background: var(--rt-filter-hover-bg); }
+#restore-dialog .restore-muted, #restore-dialog .restore-id { color: var(--rt-text-muted); font-size: .8rem; }
+.restore-file-meta, .restore-id { overflow-wrap: anywhere; }
+.restore-table-scroll { overflow-x: auto; }
+#restore-dialog .restore-counts { font-size: .875rem; margin: .75rem 0 1rem; }
+#restore-dialog .restore-counts th, #restore-dialog .restore-counts td { padding: .5rem; white-space: nowrap; }
+#restore-dialog .restore-session { padding: 1rem; margin: 1rem 0; border: 1px solid var(--rt-border); border-radius: .6rem; }
+#restore-dialog .restore-details { margin: .65rem 0; border-bottom: 1px solid var(--rt-border); padding-bottom: .5rem; }
+#restore-dialog .restore-details > summary { font-size: .875rem; line-height: 1.6; overflow-wrap: anywhere; }
+#restore-dialog .restore-details > div { padding: .5rem .25rem 0; }
+#restore-dialog .restore-comparison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; margin: .75rem 0; }
+#restore-dialog .restore-comparison section { margin: 0; padding: .75rem; border: 1px solid var(--rt-border); border-radius: .4rem; }
+#restore-dialog .restore-field { padding: .4rem; font-size: .8rem; }
+#restore-dialog .restore-field strong { font-size: .8rem; }
+#restore-dialog .restore-difference { background: var(--rt-filter-hover-bg); border-left: 3px solid var(--pico-primary); }
+#restore-dialog .restore-value { white-space: pre-wrap; overflow-wrap: anywhere; margin: .25rem 0 .5rem; font-size: .85rem; }
+#restore-dialog .restore-batch, #restore-dialog .restore-pages { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .75rem 0; }
+#restore-dialog .restore-batch button, #restore-dialog .restore-pages button { margin: 0; padding: .5rem .7rem; font-size: .8rem; }
+#restore-dialog .restore-pages span { font-size: .8rem; color: var(--rt-text-muted); }
+#restore-dialog footer { flex-wrap: wrap; position: sticky; bottom: -1.5rem; padding-bottom: .75rem; background: var(--rt-card-bg); z-index: 1; }
+#restore-dialog footer button { white-space: normal; }
+@media (max-width: 600px) {
+  #restore-dialog { padding: .5rem; }
+  #restore-dialog > article { padding: 1rem; max-height: calc(100dvh - 1rem); }
+  #restore-dialog footer { bottom: -1rem; }
+  #restore-dialog .restore-session { padding: .75rem; }
+  #restore-dialog .restore-comparison { grid-template-columns: minmax(0, 1fr); }
+  #restore-dialog footer button { flex: 1 1 8rem; }
+  #restore-dialog .restore-batch button { width: 100%; }
 }

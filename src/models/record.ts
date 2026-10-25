@@ -52,7 +52,7 @@ function withoutDefaultSessionName(session: Session, index: number): Session {
   return result;
 }
 
-// Shared by local storage and future full-data backups.
+// Shared by local storage and full-data backups.
 export function serializeAppData(data: AppData): string {
   return JSON.stringify({
     ...data,

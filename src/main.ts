@@ -1,10 +1,12 @@
 import "@picocss/pico/css/pico.min.css";
 import "./styles/main.css";
-import { resolveSessionNames, type RecordItem, type RecordResult, type Session } from "./models/record";
+import { resolveSessionNames, type AppData, type RecordItem, type RecordResult, type Session } from "./models/record";
 import { createKstTimestamp, kstDate, kstTime, kstTimeParts, todayKst } from "./services/date";
 import { calculateStatistics, displayNumber } from "./services/statistics";
 import { exportRecords, importRecords } from "./services/transfer";
 import { loadData, removeData, saveData } from "./storage/local-storage";
+import { createBackupDialog } from "./ui/backup-dialog";
+import type { RestoreMode } from "./services/backup";
 
 export type ResultFilter = "all" | "success" | "fail" | "unspecified";
 
@@ -132,6 +134,8 @@ root.innerHTML = `
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </summary>
         <div class="header-menu-panel" role="menu" aria-label="데이터 관리 메뉴">
+          <button type="button" data-action="download-backup" role="menuitem">전체 백업 다운로드</button>
+          <button type="button" data-action="restore-backup" role="menuitem">백업 파일 복원</button>
           <button type="button" data-action="clear-all" role="menuitem">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg>
             모든 데이터 삭제
@@ -1257,6 +1261,12 @@ root.addEventListener("click", (event) => {
       }
       return;
     }
+    if (action === "download-backup" || action === "restore-backup") {
+      button.closest("details")?.removeAttribute("open");
+      if (action === "download-backup") backupDialog.download();
+      else backupDialog.open();
+      return;
+    }
     if (action === "clear-all") {
       if (window.confirm("모든 세션과 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다. 테마 설정은 유지됩니다.")) {
         clearAllData();
@@ -1422,6 +1432,26 @@ async function handleImport(): Promise<void> {
     importFeedback.classList.add("error");
   }
 }
+
+function applyBackup(candidate: AppData, mode: RestoreMode): boolean {
+  // Save the isolated candidate before touching current data or its pending save.
+  if (!saveData(candidate)) return false;
+  cancelScheduledSave();
+  appData.version = candidate.version;
+  appData.sessionsByDate = candidate.sessionsByDate;
+  if (mode === "replace") {
+    selectedDate = Object.keys(candidate.sessionsByDate).sort().at(-1) ?? todayKst();
+    activeSessionIndex = 0;
+  }
+  records = getCurrentSession().records;
+  selectedResultFilter = "all";
+  isSelectionMode = false;
+  selectedRecordIds.clear();
+  render();
+  return true;
+}
+
+const backupDialog = createBackupDialog({ getData: () => appData, apply: applyBackup, status: setStatus });
 
 render();
 
