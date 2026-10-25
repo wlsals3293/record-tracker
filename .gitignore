@@ -38,5 +38,7 @@ Thumbs.db
 # Coverage
 coverage/
 
-# Local working notes
+# Local working notes and browser test output
 /.local-notes/
+/test-results/
+/playwright-report/
