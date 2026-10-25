@@ -16,7 +16,7 @@ export type ResultFilter = "all" | "success" | "fail" | "unspecified";
    ======================================================================== */
 
 type ThemePreference = "system" | "light" | "dark";
-const THEME_KEY = "rt-theme";
+const THEME_KEY = "record-tracker-theme";
 
 function getSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";

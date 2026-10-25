@@ -62,11 +62,11 @@ test('unavailable preference storage does not interrupt the app', (t) => {
 });
 
 test('real storage module saves and reloads all records while leaving theme unchanged', () => {
-  entries.set('rt-theme', 'dark');
+  entries.set('record-tracker-theme', 'dark');
   assert.equal(saveData(data), true);
   assert.deepEqual(JSON.parse(entries.get(STORAGE_KEY)), data);
   assert.deepEqual(loadData(), data);
-  assert.equal(entries.get('rt-theme'), 'dark');
+  assert.equal(entries.get('record-tracker-theme'), 'dark');
 });
 
 test('failed writes return false and preserve previously saved data', (t) => {
@@ -102,7 +102,7 @@ test('legacy stored records migrate without changing the original stored value o
 
 test('removal preserves theme and reports storage failures without discarding data', (t) => {
   saveData(data);
-  entries.set('rt-theme', 'dark');
+  entries.set('record-tracker-theme', 'dark');
   t.mock.method(console, 'error', () => {});
   const remove = t.mock.method(localStorage, 'removeItem', () => { throw new Error('Blocked'); });
   assert.equal(removeData(), false);
@@ -110,5 +110,5 @@ test('removal preserves theme and reports storage failures without discarding da
   remove.mock.restore();
   assert.equal(removeData(), true);
   assert.equal(entries.has(STORAGE_KEY), false);
-  assert.equal(entries.get('rt-theme'), 'dark');
+  assert.equal(entries.get('record-tracker-theme'), 'dark');
 });

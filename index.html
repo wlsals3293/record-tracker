@@ -9,7 +9,7 @@
     <script>
       // FOUC 방지: 페이지 로드 전에 저장된 테마를 즉시 적용
       (function() {
-        var saved = localStorage.getItem('rt-theme');
+        var saved = localStorage.getItem('record-tracker-theme');
         var theme = 'light';
         if (saved === 'dark' || saved === 'light') {
           theme = saved;

@@ -31,7 +31,7 @@ export async function startApp(page, data = appData([item(0)])) {
   await page.addInitScript((seed) => {
     if (!sessionStorage.getItem('test-seeded')) {
       localStorage.setItem('record-tracker-data', JSON.stringify(seed));
-      localStorage.setItem('rt-theme', 'dark');
+      localStorage.setItem('record-tracker-theme', 'dark');
       sessionStorage.setItem('test-seeded', 'yes');
     }
     window.__failSave = false;
@@ -39,11 +39,11 @@ export async function startApp(page, data = appData([item(0)])) {
     window.__themeAccess = [];
     const get = Storage.prototype.getItem, set = Storage.prototype.setItem, remove = Storage.prototype.removeItem;
     Storage.prototype.getItem = function(key) {
-      if (key === 'rt-theme') window.__themeAccess.push('get');
+      if (key === 'record-tracker-theme') window.__themeAccess.push('get');
       return get.call(this, key);
     };
     Storage.prototype.setItem = function(key, value) {
-      if (key === 'rt-theme') window.__themeAccess.push('set');
+      if (key === 'record-tracker-theme') window.__themeAccess.push('set');
       if (key === 'record-tracker-data') {
         window.__writes++;
         if (window.__failSave) throw new DOMException('Test quota', 'QuotaExceededError');
@@ -51,7 +51,7 @@ export async function startApp(page, data = appData([item(0)])) {
       return set.call(this, key, value);
     };
     Storage.prototype.removeItem = function(key) {
-      if (key === 'rt-theme') window.__themeAccess.push('remove');
+      if (key === 'record-tracker-theme') window.__themeAccess.push('remove');
       return remove.call(this, key);
     };
   }, data);
