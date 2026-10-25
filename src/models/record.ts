@@ -25,6 +25,26 @@ export function defaultSessionName(index: number): string {
   return `세션 ${index + 1}`;
 }
 
+// Reserve explicit names before assigning automatic names in session order.
+// automaticIndex previews restoring one session to an automatic name.
+export function resolveSessionNames(sessions: readonly Session[], automaticIndex = -1): string[] {
+  const names = sessions.map((session, index) =>
+    index === automaticIndex || session.name === undefined || session.name === defaultSessionName(index)
+      ? ""
+      : session.name,
+  );
+  for (let index = 0; index < names.length; index++) {
+    if (names[index] !== "") continue;
+    let nameIndex = index;
+    let name = defaultSessionName(nameIndex);
+    while (names.some((existing) => existing.trim() === name)) {
+      name = defaultSessionName(++nameIndex);
+    }
+    names[index] = name;
+  }
+  return names;
+}
+
 function withoutDefaultSessionName(session: Session, index: number): Session {
   if (session.name === undefined || session.name !== defaultSessionName(index)) return session;
   const result = { ...session };

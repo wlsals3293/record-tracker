@@ -1,6 +1,6 @@
 import "@picocss/pico/css/pico.min.css";
 import "./styles/main.css";
-import { defaultSessionName, type RecordItem, type RecordResult, type Session } from "./models/record";
+import { resolveSessionNames, type RecordItem, type RecordResult, type Session } from "./models/record";
 import { createKstTimestamp, kstDate, kstTime, kstTimeParts, todayKst } from "./services/date";
 import { calculateStatistics, displayNumber } from "./services/statistics";
 import { exportRecords, importRecords } from "./services/transfer";
@@ -695,20 +695,19 @@ function createId(): string {
   return `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`;
 }
 
-function sessionName(session: Session, index: number): string {
-  return session.name ?? defaultSessionName(index);
+function sessionName(index = activeSessionIndex): string {
+  return resolveSessionNames(getSessionsForDate())[index];
 }
 
 function sessionNameExists(name: string, excludedIndex = -1): boolean {
-  return getSessionsForDate().some((session, index) =>
-    index !== excludedIndex && sessionName(session, index).trim() === name,
+  return resolveSessionNames(getSessionsForDate()).some((existing, index) =>
+    index !== excludedIndex && existing.trim() === name,
   );
 }
 
 function updateSessionControls(): void {
   const sessions = getSessionsForDate();
-  const session = getCurrentSession();
-  const name = sessionName(session, activeSessionIndex);
+  const name = sessionName();
   sessionNameButton.textContent = name;
   sessionNameButton.title = `${name} 관리`;
   previousSessionButton.disabled = activeSessionIndex === 0;
@@ -728,23 +727,19 @@ function switchSession(index: number): void {
 
 function addSession(): void {
   const sessions = getSessionsForDate();
-  let nameIndex = sessions.length;
-  while (sessionNameExists(defaultSessionName(nameIndex))) nameIndex++;
   const session: Session = { records: [] };
-  if (nameIndex !== sessions.length) session.name = defaultSessionName(nameIndex);
   sessions.push(session);
   activeSessionIndex = sessions.length - 1;
   records = session.records;
   selectedRecordIds.clear();
   isSelectionMode = false;
   persist();
-  setStatus(`${sessionName(session, activeSessionIndex)}을 추가했습니다.`);
+  setStatus(`${sessionName()}을 추가했습니다.`);
   render();
 }
 
 function openSessionDialog(): void {
-  const session = getCurrentSession();
-  sessionNameInput.value = sessionName(session, activeSessionIndex);
+  sessionNameInput.value = sessionName();
   sessionDialogFeedback.textContent = "";
   sessionDialogFeedback.classList.remove("error");
   const isOnlySession = getSessionsForDate().length === 1;
@@ -770,7 +765,7 @@ function saveSessionName(): void {
     return;
   }
   const session = getCurrentSession();
-  if (name === defaultSessionName(activeSessionIndex)) {
+  if (name === resolveSessionNames(getSessionsForDate(), activeSessionIndex)[activeSessionIndex]) {
     delete session.name;
   } else {
     session.name = name;
@@ -785,8 +780,7 @@ function saveSessionName(): void {
 function deleteCurrentSession(): void {
   const sessions = getSessionsForDate();
   if (sessions.length === 1) return;
-  const session = getCurrentSession();
-  if (!window.confirm(`“${sessionName(session, activeSessionIndex)}” 세션과 모든 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
+  if (!window.confirm(`“${sessionName()}” 세션과 모든 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
 
   sessions.splice(activeSessionIndex, 1);
   activeSessionIndex = Math.min(activeSessionIndex, sessions.length - 1);
