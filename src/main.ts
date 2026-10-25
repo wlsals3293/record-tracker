@@ -1166,17 +1166,12 @@ root.addEventListener("click", (event) => {
     if (action === "add-session") { addSession(); return; }
     if (action === "open-session-dialog") { openSessionDialog(); return; }
     if (action === "today") {
-      if (selectedDate !== todayKst()) {
-        if (selectedRecordIds.size > 0) {
-          if (!window.confirm("날짜를 변경하면 현재 선택한 기록이 초기화되고 선택 모드가 해제됩니다. 계속할까요?")) return;
-          isSelectionMode = false;
-          selectedRecordIds.clear();
-        }
-        selectedDate = todayKst();
-        resetSessionForSelectedDate();
-        setStatus();
-        render();
-      }
+      const today = todayKst();
+      if (selectedDate === today) return;
+      selectedDate = today;
+      resetSessionForSelectedDate();
+      setStatus();
+      render();
       return;
     }
     if (action === "filter-result") {
