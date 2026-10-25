@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test, beforeEach, afterEach } from 'node:test';
 import { loadData, saveData, removeData, STORAGE_KEY } from '../src/storage/local-storage.ts';
+import { CURRENT_SESSION_KEY, loadCurrentSession, saveCurrentSession } from '../src/storage/current-session.ts';
+import { serializeBackup } from '../src/services/backup.ts';
+import { todayKst } from '../src/services/date.ts';
 
 const data = {
   version: 2,
@@ -27,6 +30,35 @@ beforeEach(() => {
 afterEach(() => {
   if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage);
   else delete globalThis.localStorage;
+});
+
+test('current session is stored separately and excluded from record data and backups', () => {
+  saveData(data);
+  saveCurrentSession('2026-10-07', 1);
+  assert.deepEqual(loadCurrentSession(loadData()), { date: '2026-10-07', index: 1 });
+  assert.deepEqual(JSON.parse(entries.get(STORAGE_KEY)), data);
+  assert.deepEqual(JSON.parse(serializeBackup(loadData())).data, data);
+});
+
+test('invalid session preferences fall back safely, including a stale session index', () => {
+  for (const raw of [null, '{broken', 'null', '[]', '{"date":"2026-02-30","index":0}', '{"date":"0000-01-01","index":0}']) {
+    entries.clear();
+    if (raw !== null) entries.set(CURRENT_SESSION_KEY, raw);
+    assert.deepEqual(loadCurrentSession(data), { date: todayKst(), index: 0 });
+  }
+  for (const index of [-1, 2, 0.5, '1', null]) {
+    entries.set(CURRENT_SESSION_KEY, JSON.stringify({ date: '2026-10-07', index }));
+    assert.deepEqual(loadCurrentSession(data), { date: '2026-10-07', index: 0 });
+  }
+  saveCurrentSession('2026-10-06', 0);
+  assert.deepEqual(loadCurrentSession(data), { date: '2026-10-06', index: 0 });
+});
+
+test('unavailable preference storage does not interrupt the app', (t) => {
+  t.mock.method(localStorage, 'getItem', () => { throw new Error('Blocked'); });
+  t.mock.method(localStorage, 'setItem', () => { throw new Error('Full'); });
+  assert.deepEqual(loadCurrentSession(data), { date: todayKst(), index: 0 });
+  assert.doesNotThrow(() => saveCurrentSession('2026-10-07', 1));
 });
 
 test('real storage module saves and reloads all records while leaving theme unchanged', () => {

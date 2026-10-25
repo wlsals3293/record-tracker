@@ -5,6 +5,7 @@ import { createKstTimestamp, kstDate, kstTime, kstTimeParts, todayKst } from "./
 import { calculateStatistics, displayNumber } from "./services/statistics";
 import { exportRecords, importRecords } from "./services/transfer";
 import { loadData, removeData, saveData } from "./storage/local-storage";
+import { loadCurrentSession, saveCurrentSession } from "./storage/current-session";
 import { createBackupDialog } from "./ui/backup-dialog";
 import type { RestoreMode } from "./services/backup";
 
@@ -93,8 +94,9 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 const root = document.querySelector<HTMLElement>("#app") ?? missingRoot();
 
 const appData = loadData();
-let selectedDate = todayKst();
-let activeSessionIndex = 0;
+const currentSession = loadCurrentSession(appData);
+let selectedDate = currentSession.date;
+let activeSessionIndex = currentSession.index;
 let records = getCurrentSession().records;
 let selectedResultFilter: ResultFilter = "all";
 let isSelectionMode = false;
@@ -668,6 +670,7 @@ function updateRowResultUI(row: HTMLElement, result: RecordResult): void {
 }
 
 function render(): void {
+  saveCurrentSession(selectedDate, activeSessionIndex);
   updateSessionControls();
   filter.value = selectedDate;
   const dayRecords = getDayRecords();

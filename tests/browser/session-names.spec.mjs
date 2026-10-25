@@ -27,7 +27,6 @@ test('session add, rename, delete and reload use the same automatic name rules',
   await rename('세션 3');
   expect((await storage(page)).sessionsByDate[date][1]).not.toHaveProperty('name');
   await page.reload();
-  await page.getByRole('button', { name: '다음 세션', exact: true }).click();
   await expect(page.locator('#session-name')).toHaveText('세션 3');
   expect((await storage(page)).sessionsByDate[date]).toEqual([{ name: '세션 2', records: [] }, { records: [] }]);
 });
